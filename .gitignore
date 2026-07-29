@@ -1,0 +1,22 @@
+# Environment & Secrets
+.env
+*.env
+
+# Python / Conda artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+posts_auto_env/
+
+# Output generated files
+posts_*.txt
+
+# IDE / Editor settings
+.vscode/
+.idea/
+*.swp
