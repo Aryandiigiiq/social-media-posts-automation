@@ -93,11 +93,16 @@ load_dotenv()
 # Configuration
 ########################################################
 class SystemConfig:
-    PROJECT_NAME: str = "Multi-Stage AI Content Engineering Platform"
+    PROJECT_NAME: str = "DIGIiq Solution Hybrid AI Content Engineering Platform"
     GEMINI_MODEL: str = "gemini-2.5-flash"
     TARGET_HUMANNESS_THRESHOLD: float = 85.0
     MAX_ATTEMPTS: int = 3
     PROMETHEUS_PORT: int = 8000
+    
+    # DIGIiq Solution Target Profile Configuration
+    TARGET_COMPANY_NAME: str = "DIGIiq Solution Private Limited"
+    TARGET_PROFILE_URL: str = "https://www.linkedin.com/company/digiiq-solution-private-limited/posts/?feedView=all"
+    TARGET_WEBSITE: str = "https://digiiq.com"
 
 config = SystemConfig()
 
@@ -113,6 +118,28 @@ llm_evaluator = ChatGoogleGenerativeAI(
     google_api_key=os.getenv("GEMINI_API_KEY"),
     temperature=0.0
 )
+
+# Ingested DIGIiq Solution Profile Context & Post Samples (https://www.linkedin.com/company/digiiq-solution-private-limited/posts/?feedView=all)
+DIGIIQ_PROFILE_CORPUS = [
+    {
+        "url": "https://www.linkedin.com/posts/digiiq-solution-private-limited_aichatbot-businessautomation-customerexperience-activity-7484918053097455616-4dUk",
+        "hashtags": ["#aichatbot", "#businessautomation", "#customerexperience", "#digiiq"],
+        "core_pillar": "AI Chatbots & Business Automation for Customer Experience",
+        "post_excerpt": "Transforming customer support and operational scaling with intelligent AI chatbots, real-time automated workflows, and data-grounded business automation."
+    },
+    {
+        "url": "https://www.linkedin.com/posts/digiiq-solution-private-limited_artificialintelligence-promptengineering-activity-7475761887134048257-mCWK",
+        "hashtags": ["#artificialintelligence", "#promptengineering", "#digiiq"],
+        "core_pillar": "Artificial Intelligence & Advanced Prompt Engineering Systems",
+        "post_excerpt": "Unlocking enterprise efficiency through contextual prompt engineering, structured LLM outputs, and custom AI agent execution."
+    },
+    {
+        "url": "https://www.linkedin.com/posts/digiiq-solution-private-limited_digiiq-artificialintelligence-digitaltransformation-activity-7475203710793469952-hCq-",
+        "hashtags": ["#digiiq", "#artificialintelligence", "#digitaltransformation"],
+        "core_pillar": "DIGIiq Digital Transformation & Production-Grade AI Solutions",
+        "post_excerpt": "Bridging corporate operational gaps by shipping production-ready AI agents, voice & video assistants, and Salesforce Agentforce & Data 360 integrations."
+    }
+]
 
 # Ingested Aidan Nguyen Tran Signature Style Corpus (https://www.linkedin.com/in/aidan-nguyen-tran-277a3a258/)
 VIRAL_LINKEDIN_CORPUS = [
@@ -174,11 +201,14 @@ class PlatformContentStrategy(BaseModel):
     readability_target: Dict[str, Any] = Field(description="Target readability thresholds.")
 
 class TrendingTopic(BaseModel):
-    topic_id: str = Field(default="trend_broad_001", description="Unique identifier for the discovered topic.")
-    title: str = Field(default="Real-World AI, Robotics & Automation Systems for Modern Business & Marketing Growth", description="Headline topic description.")
-    domain: str = Field(default="AI, Robotics, Real World, Automation, Marketing", description="Technical domain classification.")
+    topic_id: str = Field(default="digiiq_trend_001", description="Unique identifier for the discovered topic.")
+    title: str = Field(default="AI Chatbots & Customer Experience: Scaling Real-Time Intelligent Workflows", description="Headline topic description blending DIGIiq profile domain with trending tech.")
+    profile_pillar: str = Field(default="AI Chatbots & Customer Experience", description="Associated DIGIiq profile core service pillar.")
+    trending_context: str = Field(default="Agentic memory & real-time streaming response loops", description="Real-time trending tech context.")
+    domain: str = Field(default="AI Chatbots, Business Automation, Customer Experience, Prompt Engineering, Digital Transformation", description="Technical domain classification.")
+    hashtags: List[str] = Field(default_factory=lambda: ["#digiiq", "#aichatbot", "#businessautomation", "#customerexperience", "#promptengineering", "#digitaltransformation"])
     score: float = Field(default=96.5, description="Relevance and viral interest score (0-100).")
-    source_query: str = Field(default="AI Robotics Real World Automation Marketing", description="Search query used to discover the trend.")
+    source_query: str = Field(default="DIGIiq Solution AI chatbot prompt engineering business automation", description="Search query used to discover the trend.")
     discovered_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 class AudienceBlueprint(BaseModel):
@@ -344,22 +374,37 @@ def remove_ai_buzzwords(text: str) -> str:
     return re.sub(r'  +', ' ', cleaned)
 
 def format_linkedin_paragraphs(text: str) -> str:
-    """Ensures raw LinkedIn post text is broken into clean 1-2 sentence paragraphs separated by double line breaks (Aidan Nguyen Tran style)."""
+    """Ensures raw LinkedIn post text has a standalone opening hook (Line 1, <10 words) followed by double line breaks, with remaining sentences broken into 1-2 sentence skimmable paragraphs (Aidan Nguyen Tran style)."""
     text = text.strip()
-    sentences = re.split(r'(?<=[.!?])\s+', text)
-    if len(sentences) <= 2:
+    
+    # Separate hashtags if present at the end
+    hashtag_match = re.search(r'(\s*(?:#\w+\s*)+)$', text)
+    hashtags = ""
+    if hashtag_match:
+        hashtags = hashtag_match.group(1).strip()
+        text = text[:hashtag_match.start()].strip()
+
+    sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
+    if not sentences:
         return text
-        
+
     paragraphs = []
+    # ALWAYS isolate sentence 1 as the standalone opening hook paragraph!
+    paragraphs.append(sentences[0])
+
+    # Process remaining sentences into 1-2 sentence paragraphs
     curr = []
-    for s in sentences:
+    for s in sentences[1:]:
         curr.append(s)
-        if len(curr) >= 2 or len(" ".join(curr)) > 100:
+        if len(curr) >= 2 or len(" ".join(curr)) > 110:
             paragraphs.append(" ".join(curr))
             curr = []
     if curr:
         paragraphs.append(" ".join(curr))
-        
+
+    if hashtags:
+        paragraphs.append(hashtags)
+
     return "\n\n".join(paragraphs)
 
 ########################################################
@@ -761,16 +806,64 @@ class ContentEngineState(TypedDict):
 # FULLY DYNAMIC SHARED UPSTREAM NODES (Stages 1-7)
 ########################################################
 def trend_discovery_node(state: ContentEngineState) -> Dict[str, Any]:
-    """STAGE 1: High-Level Broad Trend Discovery (AI, Robotics, Real World, Automation, Marketing)."""
-    print("[->] STAGE 1: Executing Trend Discovery for High-Level Domains (AI, Robotics, Real World, Automation, Marketing)...")
-    topic = TrendingTopic(
-        topic_id="trend_broad_001",
-        title="Real-World AI, Robotics & Automation Systems for Modern Business & Marketing Growth",
-        domain="AI, Robotics, Real World, Automation, Marketing",
-        score=96.5,
-        source_query="AI Robotics Real World Automation Marketing"
-    )
-    return {"trending_topics": [topic.model_dump()]}
+    """STAGE 1: Dynamic Hybrid Topic Discovery (DIGIiq Solution Profile Pillars + Trending AI/Tech Topics)."""
+    print(f"[->] STAGE 1: Discovering & Blending Topics for {config.TARGET_COMPANY_NAME} ({config.TARGET_PROFILE_URL})...")
+    
+    # 5 Hybrid Blended Topics intersecting DIGIiq profile pillars & trending tech
+    hybrid_topics = [
+        TrendingTopic(
+            topic_id="digiiq_hybrid_001",
+            title="AI Chatbots & Customer Experience: Scaling Real-Time Intelligent Support Workflows",
+            profile_pillar="AI Chatbots & Customer Experience (#aichatbot #customerexperience)",
+            trending_context="Real-time streaming agentic memory & low-latency response loops",
+            domain="AI Chatbots, Customer Experience, Business Automation",
+            hashtags=["#aichatbot", "#businessautomation", "#customerexperience", "#digiiq"],
+            score=98.0,
+            source_query="AI chatbot customer experience automation trending"
+        ),
+        TrendingTopic(
+            topic_id="digiiq_hybrid_002",
+            title="Enterprise Prompt Engineering: Structuring LLMs for Zero-Defect Business Automation",
+            profile_pillar="Advanced Prompt Engineering (#promptengineering #artificialintelligence)",
+            trending_context="Deterministic structured outputs & automated evaluation guardrails",
+            domain="Prompt Engineering, Artificial Intelligence, System Architecture",
+            hashtags=["#artificialintelligence", "#promptengineering", "#businessautomation", "#digiiq"],
+            score=96.5,
+            source_query="Prompt engineering enterprise business automation trends"
+        ),
+        TrendingTopic(
+            topic_id="digiiq_hybrid_003",
+            title="DIGIiq Digital Transformation: Shipping Enterprise AI Agents Grounded in Proprietary Data",
+            profile_pillar="Digital Transformation & Custom AI Agents (#digiiq #digitaltransformation)",
+            trending_context="Production-grade RAG, Salesforce Data 360 & enterprise tool calling",
+            domain="Digital Transformation, Artificial Intelligence, Enterprise AI",
+            hashtags=["#digiiq", "#artificialintelligence", "#digitaltransformation"],
+            score=97.2,
+            source_query="Digital transformation enterprise AI agents grounded data"
+        ),
+        TrendingTopic(
+            topic_id="digiiq_hybrid_004",
+            title="Voice & Video AI Assistants: Building Production-Grade Multi-Modal Business Operations",
+            profile_pillar="Voice & Video Systems + Business Automation",
+            trending_context="Sub-300ms multi-modal voice processing & real-time video agent interaction",
+            domain="Voice AI, Business Automation, Multi-Modal Systems",
+            hashtags=["#businessautomation", "#customerexperience", "#artificialintelligence", "#digiiq"],
+            score=95.8,
+            source_query="Production grade voice video AI assistants business automation"
+        ),
+        TrendingTopic(
+            topic_id="digiiq_hybrid_005",
+            title="Operationalizing AI Strategy: Eliminating Workflow Bottlenecks Beyond Corporate Slideware",
+            profile_pillar="AI Strategy & Process Automation (#businessautomation #digitaltransformation)",
+            trending_context="Automated analytics ingestion, REST API webhooks & ROI measurement",
+            domain="Business Automation, AI Strategy, Digital Transformation",
+            hashtags=["#businessautomation", "#digitaltransformation", "#aichatbot", "#digiiq"],
+            score=96.0,
+            source_query="Enterprise AI strategy operational workflow automation"
+        )
+    ]
+    
+    return {"trending_topics": [t.model_dump() for t in hybrid_topics]}
 
 def audience_planning_node(state: ContentEngineState) -> Dict[str, Any]:
     """STAGE 2: Dynamic Audience Planning from discovered trend topics."""
@@ -870,16 +963,32 @@ def knowledge_indexing_node(state: ContentEngineState) -> Dict[str, Any]:
     return {"knowledge_documents": [k_doc.model_dump()]}
 
 def viral_reference_analysis_node(state: ContentEngineState) -> Dict[str, Any]:
-    """STAGE 5.5: Viral LinkedIn Reference Analysis using LlamaIndex over Aidan Nguyen Tran's signature post corpus."""
-    print("[->] STAGE 5.5: Executing Aidan Nguyen Tran Signature Reference Analysis via LlamaIndex...")
+    """STAGE 5.5: Dynamic Research Hook & Reference Analysis using LlamaIndex over DIGIiq Profile & Aidan Nguyen Tran's post corpus."""
+    print(f"[->] STAGE 5.5: Executing Dynamic Research Hook & Reference Analysis for {config.TARGET_COMPANY_NAME} & Aidan Nguyen Tran Style...")
     llama_service = SemanticIndexService()
-    retrieved = llama_service.index_and_retrieve(VIRAL_LINKEDIN_CORPUS, "Aidan Nguyen Tran founder content engineer system memory automation")
+    
+    digiiq_texts = [p["post_excerpt"] for p in DIGIIQ_PROFILE_CORPUS]
+    retrieved_digiiq = llama_service.index_and_retrieve(digiiq_texts, "DIGIiq AI chatbot prompt engineering business automation customer experience")
+    retrieved_aidan = llama_service.index_and_retrieve(VIRAL_LINKEDIN_CORPUS, "Aidan Nguyen Tran founder content engineer system memory automation")
+    
+    # Extract dynamic hook design system from research topics
+    topics = state.get("trending_topics", [])
+    topic_hook_inspirations = []
+    for t in topics:
+        t_title = t.get("title", "")
+        t_pillar = t.get("profile_pillar", "")
+        t_context = t.get("trending_context", "")
+        inspiration = f"Topic [{t_pillar}]: Research contrast around '{t_context}' -> Synthesize an original <10 word line 1 hook highlighting systemic friction or operational metric impact."
+        topic_hook_inspirations.append(inspiration)
     
     insights = {
-        "aidan_nguyen_tran_hook_rule": "Opening sentence MUST be under 10 words, framing AI/automation/growth as a system or memory problem.",
+        "digiiq_brand_focus": "DIGIiq Solution Private Limited: AI chatbots, prompt engineering, business automation, customer experience, digital transformation.",
+        "hook_design_system_law": "DO NOT use hardcoded static hooks. For each post, synthesize a fresh, original <10 word opening hook directly from topic research and industry case studies.",
+        "aidan_nguyen_tran_hook_rule": "Opening sentence MUST be standalone on Line 1, strictly under 10 words, framing AI/automation/growth as a system or memory problem.",
         "narrative_arc": "Upfront Hook (<10w) -> System Bottleneck -> 3-Step Tactical Solution -> Business Outcome -> Reflective CTA.",
-        "subtle_marketing_rule": "Connect AI, Robotics & Automation to growth outcomes naturally without hard pitches.",
-        "retrieved_reference_snippets": retrieved
+        "subtle_marketing_rule": "Connect DIGIiq AI Chatbots, Prompt Engineering & Automation to business outcomes naturally without hard pitches.",
+        "retrieved_reference_snippets": retrieved_digiiq + retrieved_aidan,
+        "topic_hook_inspirations": topic_hook_inspirations
     }
     return {"viral_story_insights": insights}
 
@@ -1056,44 +1165,53 @@ def linkedin_ai_writer_method1_node(state: ContentEngineState) -> Dict[str, Any]
     viral_insights = state.get("viral_story_insights", {})
     generator = llm.with_structured_output(LinkedInPostBatch)
     
-    prompt = f"""You are a Lead Systems Architect writing LinkedIn posts that strictly embody AIDAN NGUYEN TRAN'S SIGNATURE FOUNDER-LED STYLE (Growth Lead at Gallium, B2B Founder Marketing & Content Engineering).
+    prompt = f"""You are a Lead AI Systems Architect writing LinkedIn posts for DIGIIQ SOLUTION PRIVATE LIMITED (Target Profile: {config.TARGET_PROFILE_URL}).
 
-MANDATORY AIDAN NGUYEN TRAN WRITING LAWS FOR EVERY POST:
+MANDATORY AIDAN NGUYEN TRAN SIGNATURE STYLE BLUEPRINT (DEEP SYSTEM FORM & HOOK LAWS):
 
-1. MANDATORY AIDAN NGUYEN TRAN STYLE MANDATE: Every post MUST adopt Aidan Nguyen Tran's signature founder-led content engineering style. In metadata, set style = "Aidan Nguyen Tran Signature Style + [Mixed Tone]".
-2. AIDAN HOOK RULE: Start EVERY post with a punchy, curiosity-driven opening sentence that is STRICTLY UNDER 10 WORDS.
-   - Post 1 style = "Aidan Nguyen Tran Signature Style + Corporate Real-World" (Hook: "Most founders treat AI automation as a feature.")
-   - Post 2 style = "Aidan Nguyen Tran Signature Style + Fun Conversational" (Hook: "We spent 6 months testing B2B LinkedIn growth.")
-   - Post 3 style = "Aidan Nguyen Tran Signature Style + Technical Story" (Hook: "We almost burned $18,000 on AI automation.")
-   - Post 4 style = "Aidan Nguyen Tran Signature Style + Mechanical Business" (Hook: "Our team used to waste 25 hours weekly.")
-   - Post 5 style = "Aidan Nguyen Tran Signature Style + Corporate Discussion" (Hook: "The biggest risk in real-world AI isn't code.")
+1. DYNAMIC RESEARCH-DRIVEN HOOK GENERATION MANDATE (LINE 1):
+   - ABSOLUTELY DO NOT USE STATIC HARDCODED HOOKS!
+   - Sentence 1 MUST be dynamically synthesized directly from the RESEARCH CONTEXT, topic findings, and industry case study data for each specific post.
+   - Take inspiration from real research, technical friction points, metric losses, or contrarian truths found in LinkedIn engineering discussions on that topic.
+   - Do NOT copy-paste existing hooks verbatim—synthesize an original, high-impact opening hook (strictly under 10 words, 4-9 words ideal) tailored specifically to the topic of that post.
+   - Line 1 MUST stand alone as paragraph 1 followed by double line breaks (\n\n).
 
-3. SYSTEM & MEMORY PERSPECTIVE: Frame AI, Robotics, Real World, Automation, and Marketing as a "system problem" or "memory engineering problem" that compounds value over time.
+2. DEEP AIDAN NGUYEN TRAN NARRATIVE BLUEPRINT:
+   - Line 1: Punchy Standalone Hook (<10 words)
+   - Line 2-3: Contrarian Twist / System Problem ("The top 1% treat it as a memory engineering system." or "The bottleneck wasn't LLM model size—it was raw context retention across multi-turn streams.")
+   - Concrete Operational Metrics: Include impressive real-world figures ($18,000 saved, 40% retention jump, 30 hours weekly saved, 250ms latency, 99.4% intent accuracy).
+   - Impressive DIGIiq System Architecture Teardown: Describe how DIGIiq engineered the solution ("At DIGIiq, we built a layered prompt architecture with automated JSON-schema guardrails and real-time RAG streaming memory directly into DIGIiq core...").
+   - Reflective Founder/Architect Closure & CTA: End with a high-signal reflective question or networking prompt inviting professional discussion.
 
-4. ULTRA-SKIMMABLE PARAGRAPHS: Format into clean 1–2 sentence paragraphs separated by double line breaks (\n\n) for effortless mobile skimmability.
+3. PERSPECTIVE MANDATE (DIGIiq SOLUTION ACCOUNT):
+   - Write from authentic DIGIiq team perspective ("Here at DIGIiq, we...", "At DIGIiq, we constantly try to be better at...", "This was our learning at DIGIiq...", "We implemented this directly into DIGIiq core...").
+
+4. ULTRA-SKIMMABLE PARAGRAPHS: Format into clean 1–2 sentence paragraphs separated by double line breaks (\n\n) for effortless mobile reading.
 
 5. BANNED WEAK INTROS: NEVER start with generic weak intros ("In the world of AI...", "Automation is transforming...", "As technology evolves...", "In today's...").
 
-6. BROAD ACCESSIBLE DOMAINS: Focus topics on AI, Robotics, Real World, Automation, and Marketing. Do NOT write dry code parameter dumps. Make posts understandable for everyone.
+6. HASHTAGS & BRANDING: Include DIGIiq Solution hashtags naturally at the end of each post (e.g. #digiiq #aichatbot #businessautomation #customerexperience #promptengineering #digitaltransformation).
 
-7. SUBTLE SOFT MARKETING / NETWORKING ALIGNMENT: Weave product/service value subtly into human stories. Connect with readers naturally to build trust and invite professional networking.
+7. 5 DISTINCT IMPRESSIVE POST ARCHITECTURES across the 5 posts:
+   - Post 1: content_structure = "3-Act Narrative Arc (Hook -> System Bottleneck -> Engineering Fix)"
+   - Post 2: content_structure = "Contrarian Myth-Busting (Myth -> Surprising System Truth -> Operational Proof)"
+   - Post 3: content_structure = "Before vs After Comparison (Manual Process vs DIGIiq Automated Architecture)"
+   - Post 4: content_structure = "Visual Micro-Breakdown (Hook -> 3 Tactical Engineering Rules -> Impact)"
+   - Post 5: content_structure = "Real-World Enterprise Case Story (Trigger -> System Shift -> Industry Connection)"
 
-8. 5 DISTINCT POST ARCHITECTURES across the 5 posts:
-   - Post 1: content_structure = "3-Act Narrative Arc (Hook -> Conflict -> Resolution)"
-   - Post 2: content_structure = "Contrarian Myth-Busting (Myth -> Surprising Truth -> Proof)"
-   - Post 3: content_structure = "Before vs After Comparison (Old Manual Process vs Automated System)"
-   - Post 4: content_structure = "Visual Micro-Breakdown (Hook -> 3 Skimmable Rules -> Action)"
-   - Post 5: content_structure = "Real-World Case Story (Surprising Trigger -> Shift -> Connection)"
-
-9. ENFORCED ROTATED CLOSURES across the 5 posts:
+8. ROTATED CLOSURES:
    - Post 1: closure_type = "Reflection Closure"
    - Post 2: closure_type = "Lesson Learned Closure"
    - Post 3: closure_type = "Business Takeaway Closure"
    - Post 4: closure_type = "Recommendation / Actionable Tip Closure"
    - Post 5: closure_type = "Discussion Invitation Closure"
 
-10. STRICT WIKIPEDIA ANTI-AI SIGNS BAN: Never use AI vocabulary ("delve", "tapestry", "testament", "game-changer", "landscape", "pivotal", "foster", "garner", "vibrant"). Never end with formulaic conclusions.
-11. METADATA MAPPING: Accurately set style, topics_used, hook_type, content_structure, closure_type, business_value_focus, and generation_method = 'Aidan Nguyen Tran Signature Engine'.
+9. STRICT WIKIPEDIA ANTI-AI SIGNS BAN: Never use AI vocabulary ("delve", "tapestry", "testament", "game-changer", "landscape", "pivotal", "foster", "garner", "vibrant"). Never end with formulaic summary conclusions.
+
+10. METADATA MAPPING: Accurately set style, topics_used, hook_type, content_structure, closure_type, business_value_focus, and generation_method = 'DIGIiq Hybrid Topic Engine'.
+
+DISCOVERED HYBRID TOPICS:
+{json.dumps([t.get('title') for t in state.get('trending_topics', [])], indent=2)}
 
 RESEARCH CONTEXT:
 {research_text[:2500]}
@@ -1268,7 +1386,8 @@ def analytics_node(state: ContentEngineState) -> Dict[str, Any]:
     
     output_lines = [
         "======================================================================",
-        "MULTI-STAGE SYSTEM EVALUATION SUMMARY (AIDAN NGUYEN TRAN MANDATORY STYLE ENGINE)",
+        f"MULTI-STAGE SYSTEM EVALUATION SUMMARY ({config.TARGET_COMPANY_NAME.upper()} HYBRID TOPIC ENGINE)",
+        f"Target Profile: {config.TARGET_PROFILE_URL}",
         "======================================================================",
         f"Average Anti-AI Humanness Score (100% Dynamic Direct Evaluator Score): {record.avg_humanness:.1f}%",
         f"Average CrewAI Dual-Audience Accessibility Score: {record.avg_groundedness:.1f}%",

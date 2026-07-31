@@ -1,12 +1,14 @@
 python-dotenv
 pydantic
 pydantic-settings
+langchain
 langchain-google-genai
 langchain-community
 langchain-core
 langgraph
 google-genai
 ddgs
+duckduckgo-search
 deepeval
 ragas
 trulens-core
@@ -17,4 +19,6 @@ spacy
 textstat
 llama-index-core
 requests
-duckduckgo_search
+crawl4ai
+deepsearcher
+crewai
