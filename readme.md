@@ -1,6 +1,6 @@
-# Pragmatic Multi-Stage AI Content Engineering Platform (LinkedIn Typefully/Taplio Suite & X Pipeline)
+# Pragmatic Multi-Stage AI Content Engineering Platform (Aidan Nguyen Tran Signature Engine & X Pipeline)
 
-An autonomous, self-correcting multi-agent content generation platform built inside a single, unified `main.py` file powered by **LangGraph**, **LangChain Tools**, **Google Gemini**, **Crawl4AI**, **LlamaIndex**, **spaCy**, **TextStat**, **DeepEval**, **RAGAS**, **TruLens**, and **Prometheus**.
+An autonomous, self-correcting multi-agent content generation platform built inside a single, unified `main.py` file powered by **CrewAI Multi-Persona Review**, **LlamaIndex Vector Engine**, **LangGraph**, **Google Gemini**, **Crawl4AI**, **spaCy**, **TextStat**, **DeepEval**, **RAGAS**, **TruLens**, and **Prometheus**.
 
 ---
 
@@ -8,41 +8,39 @@ An autonomous, self-correcting multi-agent content generation platform built ins
 
 The platform features **decoupled, specialized generation and evaluation pipelines for LinkedIn and X (Twitter)**:
 - **X Pathway**: 100% untouched production-ready pipeline generating 5 punchy, high-signal, code-and-parameter-dense technical threads.
-- **LinkedIn Stream (LangChain Typefully & Taplio Tool Suite)**: 5 story-driven, high-clarity posts formatted via open-source tools inspired by Typefully and Taplio for maximum skimmability, mobile breathing room, and executive reader engagement.
+- **LinkedIn Stream (Mandatory Aidan Nguyen Tran Signature Style Engine)**: 5 authentic, founder-led story posts mandating Aidan Nguyen Tran's signature writing style (`https://www.linkedin.com/in/aidan-nguyen-tran-277a3a258/`) with 100% dynamic direct evaluator score outputs.
 
 ---
 
-## 2. Open-Source LangChain Typefully & Taplio Tools
+## 2. Mandatory Aidan Nguyen Tran Signature Style (`style` Metric)
 
-1. **`typefully_taplio_formatting_tool` (`@tool`)**:
-   - **Hook Line Optimization**: Ensures opening sentences are short ($< 12$ words), intriguing, and open a curiosity gap.
-   - **White-Space Breathing Room**: Formats posts into clean 1–3 sentence paragraphs separated by `\n\n` for mobile skimmability.
-   - **CTA Rotation**: Rotates closures across the 5 posts (`Reflection`, `Lesson Learned`, `Business Takeaway`, `Recommendation`, `Discussion Invitation`).
-2. **`taplio_engagement_predictor_tool` (`@tool`)**:
-   - Predicts **Skimmability Index (0–100)**, **Comment Trigger Score (0–100)**, and **Mobile Readability Balance**.
+Every generated LinkedIn post strictly embodies Aidan Nguyen Tran's signature founder-led content engineering style:
+- **Upfront Hook**: First sentence strictly $< 10$ words, framing AI, robotics, real-world systems, automation, and marketing as a systems/memory engineering problem.
+- **Paragraph Cadence**: Ultra-skimmable 1–2 sentence paragraphs separated by `\n\n` for maximum visual breathing room.
+- **Content Teardown Architecture**: Teardown / Build-in-Public format (Hook -> System Pain -> 3-Step Fix -> Outcome -> Reflective Question).
+- **Subtle Soft Marketing**: Softly positions automated growth & content systems without hard selling.
 
----
-
-## 3. Anti-AI Predictability & Wikipedia Signs Audit (`AIPredictabilityAnalyzerService`)
-
-- **N-Gram Transition Predictability Entropy ($H$)**: Calculates 2-gram and 3-gram token transition entropy across text. AI text exhibits predictable low-entropy token sequences; human writing exhibits unpredictable token transitions.
-- **Wikipedia 14 Signs of AI Writing Audit**: Detects overused AI vocabulary ("delve", "tapestry", "testament", "game-changer", "landscape", "pivotal", "foster", "garner", "vibrant"), formulaic closures, excessive em-dashes, and passive abstractions.
-
----
-
-## 4. Post-Level Verification & `[UNFIT]` Header Marking
-
-- **Individual Post Gate**: The evaluation router inspects **each post individually** (`r["anti_ai_score"] >= 82.0` and `r["passed"] == True`).
-- **`[UNFIT]` Header Marking**: If after 3 attempts a post's Anti-AI score remains below threshold ($< 82.0$), it is output in the final report marked with a clear header:
-  `[UNFIT - FAILED ANTI-AI HUMANNESS GATE]`.
+### Post Style Mixes:
+1. **Post 1**: `Aidan Nguyen Tran Signature Style + Corporate Real-World`
+2. **Post 2**: `Aidan Nguyen Tran Signature Style + Fun Conversational`
+3. **Post 3**: `Aidan Nguyen Tran Signature Style + Technical Story`
+4. **Post 4**: `Aidan Nguyen Tran Signature Style + Mechanical Business`
+5. **Post 5**: `Aidan Nguyen Tran Signature Style + Corporate Discussion`
 
 ---
 
-## 5. How to Run
+## 3. 100% Dynamic Direct Evaluator Scoring
+
+- **Anti-AI Humanness Score**: Directly pulled from `LinkedInEvaluatorService` (`AIPredictabilityAnalyzerService` n-gram entropy $H$ & Wikipedia signs penalty) as an un-truncated, precise floating-point number (e.g. `87.4%`).
+- Zero static fallbacks or hardcoded values in text reports.
+
+---
+
+## 4. How to Run
 
 Execute the main pipeline:
 ```bash
 python main.py
 ```
 
-The system will generate 10 total posts (5 LinkedIn Typefully/Taplio optimized, 5 X/Twitter) saved to a timestamped file (`posts_YYYYMMDD_HHMMSS.txt`).
+The system will generate 10 total posts (5 LinkedIn Aidan Nguyen Tran Signature posts, 5 X/Twitter threads) saved to a timestamped file (`posts_YYYYMMDD_HHMMSS.txt`).
