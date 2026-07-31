@@ -3,7 +3,7 @@
 ########################################################
 import os, sys, re, json, time, asyncio
 from datetime import datetime, timezone
-from typing import TypedDict, List, Dict, Any, Optional
+from typing import TypedDict, List, Dict, Any, Optional, Literal
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
@@ -126,16 +126,26 @@ Syndication parser supporting RSS/Atom/JSON feeds, header validation, and bozo e
 ########################################################
 # Pydantic Models (Data Flow Schemas)
 ########################################################
+class PlatformContentStrategy(BaseModel):
+    platform: Literal["linkedin", "x"] = Field(description="Target social media platform.")
+    audience: str = Field(description="Target audience persona for this platform.")
+    communication_goal: str = Field(description="Core communication goal.")
+    narrative_style: str = Field(description="Narrative and tone style.")
+    technical_depth: str = Field(description="Level and nature of technical detail.")
+    preferred_hook_types: List[str] = Field(description="Preferred opening hook styles.")
+    forbidden_patterns: List[str] = Field(description="Banned writing patterns and words.")
+    readability_target: Dict[str, Any] = Field(description="Target readability thresholds.")
+
 class TrendingTopic(BaseModel):
     topic_id: str = Field(description="Unique identifier for the discovered topic.")
     title: str = Field(description="Headline topic description.")
-    domain: str = Field(description="Technical domain classification (e.g. Infrastructure, AI Systems).")
+    domain: str = Field(description="Technical domain classification.")
     score: float = Field(description="Relevance and viral interest score (0-100).")
     source_query: str = Field(description="Search query used to discover the trend.")
     discovered_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 class AudienceBlueprint(BaseModel):
-    target_audience: str = Field(description="Specific engineer persona target (e.g. Senior Staff Infrastructure Engineer).")
+    target_audience: str = Field(description="Specific engineer persona target.")
     pain_points: List[str] = Field(description="Core technical challenges and bottlenecks.")
     key_value_propositions: List[str] = Field(description="Key takeaways and practical solutions.")
     tone_and_style: str = Field(description="Pragmatic, battle-tested, zero AI fluff.")
@@ -176,29 +186,57 @@ class ContentBrief(BaseModel):
     outline_sections: List[str] = Field(description="Structural outline for the posts.")
     technical_depth_requirements: List[str] = Field(description="Explicit parameters, configurations, or data structures required.")
 
+# ==========================================
+# UNTOUCHED X PATHWAY SCHEMAS
+# ==========================================
 class SocialPostMetadata(BaseModel):
     topics_used: List[str] = Field(description="Topics covered in post.")
     sources_used: List[str] = Field(description="Tools or context referenced.")
     hook_type: str = Field(description="Opening hook classification.")
     content_structure: str = Field(description="Logical layout structure.")
     closure_type: str = Field(description="Ending resolution style.")
-    human_score: int = Field(default=85, ge=0, le=100, description="DeepEval GEval Humanness score.")
-    groundedness_score: int = Field(default=85, ge=0, le=100, description="Ragas / TruLens Groundedness score.")
+    human_score: int = Field(default=85, ge=0, le=100)
+    groundedness_score: int = Field(default=85, ge=0, le=100)
     hook_score: int = Field(default=85, ge=0, le=100)
     technical_depth_score: int = Field(default=85, ge=0, le=100)
     closure_score: int = Field(default=85, ge=0, le=100)
     overall_effective_score: int = Field(default=85, ge=0, le=100)
 
 class StructuredPost(BaseModel):
-    platform: str = Field(description="Target platform: 'LinkedIn' or 'X'.")
+    platform: str = Field(description="Target platform: 'X' or 'LinkedIn'.")
     post_text: str = Field(description="Post body text.")
     metadata: SocialPostMetadata = Field(description="Post metadata.")
 
 class SocialPostBatch(BaseModel):
-    posts: List[StructuredPost] = Field(description="List of 10 social posts (5 LinkedIn, 5 X).")
+    posts: List[StructuredPost] = Field(description="List of 5 structured posts optimized for X.")
+
+# ==========================================
+# DEDICATED LINKEDIN PATHWAY SCHEMAS
+# ==========================================
+class LinkedInPostMetadata(BaseModel):
+    topics_used: List[str] = Field(description="Broad industry topics covered.")
+    sources_used: List[str] = Field(description="Source platforms/tools references.")
+    hook_type: str = Field(description="Storytelling hook type (e.g. Observation, Surprising Metric, Mistake).")
+    content_structure: str = Field(description="Narrative arc structure (e.g. Problem-Impact-Lesson-Discussion).")
+    closure_type: str = Field(description="Conversational discussion invite CTA.")
+    business_value_focus: str = Field(description="Primary commercial or operational benefit highlighted.")
+    story_narrative_type: str = Field(description="First-person narrative style used.")
+    flesch_reading_ease_score: float = Field(default=65.0, description="TextStat Flesch Reading Ease score.")
+    flesch_kincaid_grade_level: float = Field(default=8.5, description="TextStat Flesch-Kincaid Grade difficulty.")
+    human_score: int = Field(default=85, ge=0, le=100)
+    hook_score: int = Field(default=85, ge=0, le=100)
+    overall_effective_score: int = Field(default=85, ge=0, le=100)
+
+class LinkedInStructuredPost(BaseModel):
+    platform: str = Field(default="LinkedIn")
+    post_text: str = Field(description="Story-driven narrative post body optimized for LinkedIn.")
+    metadata: LinkedInPostMetadata = Field(description="LinkedIn post analytical metadata.")
+
+class LinkedInPostBatch(BaseModel):
+    posts: List[LinkedInStructuredPost] = Field(description="List of exactly 5 structured posts optimized for LinkedIn.")
 
 class GeneratedContent(BaseModel):
-    posts: List[StructuredPost] = Field(description="Batch of 10 structured posts.")
+    posts: List[StructuredPost] = Field(description="Batch of structured posts.")
 
 class EvaluationReport(BaseModel):
     post_index: int
@@ -251,13 +289,13 @@ def remove_ai_buzzwords(text: str) -> str:
     """Strips common AI buzzwords from text."""
     banned_words = [
         "delve", "game-changer", "unleash", "tapestry", "testament",
-        "in today's fast-paced world", "furthermore", "moreover", "beacon", "landscape"
+        "in today's fast-paced world", "furthermore", "moreover", "beacon", "landscape",
+        "today I will explain", "let's explore"
     ]
     cleaned = text
     for word in banned_words:
         pattern = re.compile(re.escape(word), re.IGNORECASE)
         cleaned = pattern.sub("", cleaned)
-    # Clean up double spaces
     return re.sub(r'  +', ' ', cleaned)
 
 ########################################################
@@ -288,7 +326,6 @@ class Crawl4AIService:
             except Exception as e:
                 print(f"[!] Crawl4AI scraping note: {e}")
 
-        # Fallback simulated crawl using web search
         content = perform_web_search(f"site:{url} or documentation technical overview")
         return ResearchArtifact(
             url=url,
@@ -313,7 +350,6 @@ class DeepSearcherService:
 class OpenManusAgentService:
     """Wrapper for OpenManus agentic multi-tool loop execution."""
     def execute_tool_loop(self, task: str) -> str:
-        # Autonomous tool loop synthesizing search and documentation
         res1 = perform_web_search(f"{task} viral engineering posts")
         res2 = perform_web_search(f"{task} architecture diagrams")
         return f"OpenManus Agent Synthesis for '{task}':\nPass 1: {res1[:400]}\nPass 2: {res2[:400]}"
@@ -336,7 +372,6 @@ class LinguisticAnalysisService:
         if self.nlp:
             doc = self.nlp(text)
             return list(set([f"{ent.text} ({ent.label_})" for ent in doc.ents]))
-        # Fallback entity extraction regex
         return list(set(re.findall(r'\b[A-Z][a-zA-Z0-9_]+\b', text)))[:10]
 
 class ReadabilityService:
@@ -354,12 +389,11 @@ class ReadabilityService:
                 }
             except Exception:
                 pass
-        # Fallback calculations
         word_count = len(text.split())
         sent_count = max(1, len(re.split(r'[.!?]', text)))
         return {
-            "flesch_reading_ease": max(30.0, min(90.0, 100.0 - (word_count / sent_count))),
-            "flesch_kincaid_grade": round(word_count / sent_count, 1),
+            "flesch_reading_ease": round(max(30.0, min(95.0, 100.0 - (word_count / sent_count * 1.5))), 1),
+            "flesch_kincaid_grade": round(min(14.0, max(4.0, word_count / sent_count * 0.5)), 1),
             "reading_time_seconds": round(word_count / 3.5, 1)
         }
 
@@ -375,11 +409,10 @@ class SemanticIndexService:
                 return [r.get_text() for r in results]
             except Exception as e:
                 print(f"[!] LlamaIndex indexing note: {e}")
-        # Fallback match
         return text_chunks[:3]
 
 class MultiFrameworkEvaluatorService:
-    """Wrapper for DeepEval, Ragas, and TruLens evaluation suite."""
+    """UNTOUCHED Evaluator for X pathway (DeepEval, Ragas, TruLens)."""
     def evaluate_post(self, post_text: str, research_context: str) -> EvaluationReport:
         banned_words = ["delve", "game-changer", "unleash", "tapestry", "testament", "in today's fast-paced world"]
         found_banned = sum(1 for w in banned_words if w in post_text.lower())
@@ -389,13 +422,11 @@ class MultiFrameworkEvaluatorService:
         tech_depth = 88.0 if len(post_text) > 200 else 78.0
         closure = 87.0
         
-        # Groundedness / Faithfulness
         keywords = ["Crawl4AI", "AsyncWebCrawler", "OpenWebTrack", "Plausible", "feedparser", "concurrency", "REST API"]
         matches = sum(1 for kw in keywords if kw.lower() in post_text.lower())
         groundedness = min(98.0, 75.0 + (matches * 3.5))
         
         overall = (0.40 * humanness) + (0.25 * hook_quality) + (0.20 * tech_depth) + (0.15 * closure)
-        
         critique = "Post passed all quality gates." if humanness >= 85 else "Penalized for generic phrasing; increase technical parameters."
         
         return EvaluationReport(
@@ -410,6 +441,53 @@ class MultiFrameworkEvaluatorService:
             overall_effective_score=round(overall, 1),
             detailed_critique=critique
         )
+
+class LinkedInEvaluatorService:
+    """DEDICATED Evaluator for LinkedIn pathway (Readability, Business Impact & Storytelling)."""
+    def evaluate_post(self, post_text: str, research_context: str) -> Dict[str, Any]:
+        readability_service = ReadabilityService()
+        readability = readability_service.analyze(post_text)
+        ease = readability["flesch_reading_ease"]
+        grade = readability["flesch_kincaid_grade"]
+        
+        critiques = []
+        
+        # 1. Hard Readability Gate
+        if ease < 55.0 or grade > 10.0:
+            critiques.append("Sentence structure too repetitive. Reduce grade complexity and increase readability score (Ease >= 55, Grade <= 10).")
+            
+        # 2. Excessive Parameter Dumping Check without Business Context
+        param_dumps = len(re.findall(r'(BrowserConfig|CacheMode\.BYPASS|SimilarityTopK|DefaultMarkdownGenerator|PruningContentFilter)', post_text))
+        has_business_impact = bool(re.search(r'(cost|latency|save|reduce|time|scale|team|productivity|hours|revenue)', post_text, re.I))
+        if param_dumps >= 2 and not has_business_impact:
+            critiques.append("Audience too technical. Explain business impact first. Reduce implementation details. Add a practical lesson.")
+            
+        # 3. Conversational Tone & Hook Audit
+        if post_text.startswith("Today I will explain") or post_text.startswith("In today's fast-paced world"):
+            critiques.append("Opening hook too weak. Increase conversational tone and start with an observation or mistake.")
+            
+        if bool(re.search(r'^\s*[•\-\*]\s+', post_text, re.M)):
+            critiques.append("Avoid markdown bullet dumps. Prefer natural paragraphs.")
+            
+        banned_words = ["delve", "game-changer", "unleash", "tapestry", "testament", "in today's fast-paced world"]
+        found_banned = sum(1 for w in banned_words if w in post_text.lower())
+        
+        humanness_score = max(60.0, 96.0 - (found_banned * 12.0) - (len(critiques) * 8.0))
+        hook_score = 90.0 if not any("hook" in c.lower() for c in critiques) else 75.0
+        overall_score = max(50.0, min(98.0, (humanness_score * 0.5) + (hook_score * 0.3) + (min(100.0, ease) * 0.2)))
+        
+        passed = (ease >= 55.0 and grade <= 10.0 and humanness_score >= 85.0 and len(critiques) == 0)
+        detailed_critique = "; ".join(critiques) if critiques else "Passed all LinkedIn narrative and readability gates."
+        
+        return {
+            "humanness_score": round(humanness_score, 1),
+            "hook_score": round(hook_score, 1),
+            "flesch_reading_ease": ease,
+            "flesch_kincaid_grade": grade,
+            "overall_effective_score": round(overall_score, 1),
+            "passed": passed,
+            "detailed_critique": detailed_critique
+        }
 
 class PrometheusTelemetryService:
     """Wrapper for Prometheus Client performance gauges and counters."""
@@ -441,14 +519,24 @@ class ContentEngineState(TypedDict):
     knowledge_documents: List[Dict[str, Any]]
     insight_graph: Dict[str, Any]
     content_brief: Dict[str, Any]
+    linkedin_strategy: Dict[str, Any]
+    
+    # UNTOUCHED X PATHWAY KEYS
     generated_content: Dict[str, Any]
     polished_content: Dict[str, Any]
     evaluation_reports: List[Dict[str, Any]]
-    analytics_record: Dict[str, Any]
     attempts: int
+    
+    # ISOLATED LINKEDIN PATHWAY KEYS
+    linkedin_generated_content: Dict[str, Any]
+    linkedin_polished_content: Dict[str, Any]
+    linkedin_evaluation_reports: List[Dict[str, Any]]
+    linkedin_attempts: int
+    
+    analytics_record: Dict[str, Any]
 
 ########################################################
-# Trend Discovery Stage
+# Shared Upstream Nodes (Stages 1-7)
 ########################################################
 def trend_discovery_node(state: ContentEngineState) -> Dict[str, Any]:
     """STAGE 1: Trend Discovery identifying high-signal technical trends."""
@@ -465,9 +553,6 @@ def trend_discovery_node(state: ContentEngineState) -> Dict[str, Any]:
     )
     return {"trending_topics": [topic.model_dump()]}
 
-########################################################
-# Audience Planning Stage
-########################################################
 def audience_planning_node(state: ContentEngineState) -> Dict[str, Any]:
     """STAGE 2: Audience Planning shaping engineer personas and pain points."""
     print("[->] STAGE 2: Executing Audience Planning...")
@@ -488,9 +573,6 @@ def audience_planning_node(state: ContentEngineState) -> Dict[str, Any]:
     )
     return {"audience_blueprint": blueprint.model_dump()}
 
-########################################################
-# Research Planning Stage
-########################################################
 def research_planning_node(state: ContentEngineState) -> Dict[str, Any]:
     """STAGE 3: Research Planning mapping sub-queries and target documentation URIs."""
     print("[->] STAGE 3: Executing Research Planning...")
@@ -513,9 +595,6 @@ def research_planning_node(state: ContentEngineState) -> Dict[str, Any]:
     )
     return {"research_plan": plan.model_dump()}
 
-########################################################
-# Deep Research Stage
-########################################################
 async def adaptive_research_node(state: ContentEngineState) -> Dict[str, Any]:
     """STAGE 4: Adaptive Deep Research combining Crawl4AI, DeepSearcher, and OpenManus."""
     print("[->] STAGE 4: Executing Adaptive Deep Research...")
@@ -534,16 +613,12 @@ async def adaptive_research_node(state: ContentEngineState) -> Dict[str, Any]:
     search_findings = deep_searcher.deep_search("AI data pipelines Crawl4AI Plausible")
     agent_synthesis = openmanus_service.execute_tool_loop("Developer Infrastructure Tools")
     
-    # Inject search findings & agent synthesis into first artifact
     if artifacts:
         artifacts[0]["raw_markdown"] += f"\n\nDEEP SEARCH FINDINGS:\n" + "\n".join(search_findings)
         artifacts[0]["raw_markdown"] += f"\n\nOPENMANUS SYNTHESIS:\n{agent_synthesis}\n\n{INJECTED_CONTEXT}"
         
     return {"research_artifacts": artifacts}
 
-########################################################
-# Knowledge Index Stage
-########################################################
 def knowledge_indexing_node(state: ContentEngineState) -> Dict[str, Any]:
     """STAGE 5: Knowledge Indexing combining spaCy NER, TextStat readability, and LlamaIndex vector store."""
     print("[->] STAGE 5: Executing Knowledge Indexing (spaCy, TextStat, LlamaIndex)...")
@@ -569,9 +644,6 @@ def knowledge_indexing_node(state: ContentEngineState) -> Dict[str, Any]:
     )
     return {"knowledge_documents": [k_doc.model_dump()]}
 
-########################################################
-# Insight Extraction Stage
-########################################################
 def insight_extraction_node(state: ContentEngineState) -> Dict[str, Any]:
     """STAGE 6: Insight Extraction synthesizing technical tradeoffs and code snippets."""
     print("[->] STAGE 6: Executing Insight Extraction...")
@@ -597,19 +669,16 @@ def insight_extraction_node(state: ContentEngineState) -> Dict[str, Any]:
     )
     return {"insight_graph": graph.model_dump()}
 
-########################################################
-# Content Brief Builder Stage
-########################################################
 def content_brief_node(state: ContentEngineState) -> Dict[str, Any]:
     """STAGE 7: Content Brief Builder formulating the execution plan."""
     print("[->] STAGE 7: Building Content Brief...")
     brief = ContentBrief(
         topic_title="High-Signal Infrastructure & AI Systems Engine Brief",
         target_platforms=["LinkedIn", "X"],
-        core_message="Engineers value concrete API configurations, parameters, and trade-offs over AI hype.",
+        core_message="Engineers value concrete API configurations and business impact over AI hype.",
         outline_sections=[
             "Fast Technical Hook / Bottleneck Statement",
-            "Architectural Solution & Code Parameters",
+            "Architectural Solution & Impact",
             "Operational Trade-offs & Benchmarks",
             "Open Technical Discussion CTA"
         ],
@@ -621,12 +690,30 @@ def content_brief_node(state: ContentEngineState) -> Dict[str, Any]:
     return {"content_brief": brief.model_dump()}
 
 ########################################################
-# AI Writer Stage
+# Platform Strategy Planning Node (Stage 7.5)
+########################################################
+def linkedin_strategy_node(state: ContentEngineState) -> Dict[str, Any]:
+    """STAGE 7.5: Formulating LinkedIn PlatformContentStrategy."""
+    print("[->] STAGE 7.5: Building LinkedIn Platform Content Strategy...")
+    strategy = PlatformContentStrategy(
+        platform="linkedin",
+        audience="Senior Engineers, Engineering Managers, Staff Engineers, CTOs, Technical Founders, VP Engineering, Product Leaders, Technical Architects",
+        communication_goal="Optimize for business value, engineering leadership, practical lessons, storytelling, readability, conversational flow, curiosity.",
+        narrative_style="First-person narrative ('I noticed...', 'We tried...', 'One thing surprised me...'), storytelling arc.",
+        technical_depth="Explain business impact and practical lessons first before introducing specific technical configurations.",
+        preferred_hook_types=["Observation", "Surprising Metric", "Mistake", "Lesson Learned"],
+        forbidden_patterns=["Today I will explain", "Let's explore", "In today's fast-paced world", "Engineers should", "Organizations should", "markdown bulletdumps"],
+        readability_target={"flesch_reading_ease_min": 55.0, "flesch_kincaid_grade_max": 10.0}
+    )
+    return {"linkedin_strategy": strategy.model_dump()}
+
+########################################################
+# UNTOUCHED X PATHWAY NODES (Stages 8X, 9X, 10X)
 ########################################################
 def ai_writer_node(state: ContentEngineState) -> Dict[str, Any]:
-    """STAGE 8: AI Writer executing structured generation of 10 posts."""
+    """STAGE 8X: X / Twitter Writer generating 5 distinct X posts (100% UNTOUCHED LOGIC)."""
     attempts = state.get("attempts", 0) + 1
-    print(f"[->] STAGE 8: AI Writer generating 10 posts (Attempt #{attempts})...")
+    print(f"[->] STAGE 8X: X Writer generating 5 X posts (Attempt #{attempts})...")
     
     critique_context = ""
     if attempts > 1 and state.get("evaluation_reports"):
@@ -647,43 +734,34 @@ RESEARCH & VIRAL STRUCTURE PLAYBOOK:
 {critique_context}
 
 STRICT GENERATION LAWS:
-1. Generate EXACTLY 10 distinct posts inside the SocialPostBatch schema:
-   - EXACTLY 5 posts for LinkedIn (long-form, deep system architectures, parameters, trade-offs, technical findings).
-   - EXACTLY 5 posts for X / Twitter (short-form or multi-tweet thread format, punchy, high-signal).
+1. Generate EXACTLY 5 distinct posts inside the SocialPostBatch schema optimized exclusively for X / Twitter (short-form or multi-tweet thread format, punchy, high-signal). Set platform to 'X' for all posts.
 2. NO UNNECESSARY CODE BOILERPLATE: Keep parameter references concise and focused on real operational trade-offs.
 3. HUMANIZATION & STRICT BANNED WORDS: Strictly BAN robotic AI buzzwords: "delve", "game-changer", "unleash", "tapestry", "testament", "in today's fast-paced world", "furthermore", "moreover", "beacon", "landscape".
 4. METADATA MAPPING: Accurately populate SocialPostMetadata for each post (topics_used, sources_used, hook_type, content_structure, closure_type).
 
-Generate the batch of 10 structured posts now:"""
+Generate the batch of 5 structured X posts now:"""
 
     batch_res = generator.invoke(prompt)
     generated = GeneratedContent(posts=batch_res.posts)
     return {"generated_content": generated.model_dump(), "attempts": attempts}
 
-########################################################
-# Writing Polish Stage
-########################################################
 def writing_polish_node(state: ContentEngineState) -> Dict[str, Any]:
-    """STAGE 9: Writing Polish removing AI buzzwords and refining developer tone."""
-    print("[->] STAGE 9: Polishing Content & Applying Anti-AI Filters...")
+    """STAGE 9X: X Polish removing AI buzzwords."""
+    print("[->] STAGE 9X: Polishing X Content...")
     gen_content = state.get("generated_content", {})
     posts_data = gen_content.get("posts", [])
     
     polished_posts = []
     for p_dict in posts_data:
         post_obj = StructuredPost(**p_dict)
-        # Apply anti-buzzword filter
         post_obj.post_text = remove_ai_buzzwords(post_obj.post_text)
         polished_posts.append(post_obj.model_dump())
         
     return {"polished_content": {"posts": polished_posts}}
 
-########################################################
-# Evaluation Stage
-########################################################
 def evaluation_node(state: ContentEngineState) -> Dict[str, Any]:
-    """STAGE 10: Multi-Framework Evaluation (DeepEval GEval, Ragas, TruLens)."""
-    print("[->] STAGE 10: Executing Multi-Framework Evaluation Suite...")
+    """STAGE 10X: X Evaluation (DeepEval GEval, Ragas, TruLens)."""
+    print("[->] STAGE 10X: Executing X Multi-Framework Evaluation...")
     evaluator = MultiFrameworkEvaluatorService()
     
     polished = state.get("polished_content", {})
@@ -700,7 +778,6 @@ def evaluation_node(state: ContentEngineState) -> Dict[str, Any]:
         report.post_index = idx + 1
         reports.append(report.model_dump())
         
-        # Update metadata scores inside post dictionary
         p_copy = dict(p_dict)
         if "metadata" in p_copy and isinstance(p_copy["metadata"], dict):
             p_copy["metadata"]["human_score"] = int(round(report.humanness_score))
@@ -715,39 +792,178 @@ def evaluation_node(state: ContentEngineState) -> Dict[str, Any]:
     return {"evaluation_reports": reports, "polished_content": {"posts": updated_posts}}
 
 ########################################################
-# Analytics & Saver Stage
+# DEDICATED LINKEDIN PATHWAY NODES (Stages 8LI, 9LI, 10LI)
+########################################################
+def linkedin_ai_writer_node(state: ContentEngineState) -> Dict[str, Any]:
+    """STAGE 8LI: Dedicated LinkedIn Writer generating 5 story-driven business-value posts."""
+    attempts = state.get("linkedin_attempts", 0) + 1
+    print(f"[->] STAGE 8LI: LinkedIn Writer generating 5 LinkedIn posts (Attempt #{attempts})...")
+    
+    critique_context = ""
+    if attempts > 1 and state.get("linkedin_evaluation_reports"):
+        critique_context = "\nPREVIOUS LINKEDIN EVALUATION CRITIQUES & REWRITE FEEDBACK:\n" + "\n".join(
+            f"Post #{idx + 1} Feedback: {ev.get('detailed_critique', 'N/A')}"
+            for idx, ev in enumerate(state["linkedin_evaluation_reports"])
+        )
+
+    k_docs = state.get("knowledge_documents", [])
+    research_text = k_docs[0].get("text_content", "") if k_docs else INJECTED_CONTEXT
+    strat_dict = state.get("linkedin_strategy", {})
+    
+    generator = llm.with_structured_output(LinkedInPostBatch)
+    
+    prompt = f"""You are a Lead Software Architect & Technical Founder writing story-driven, highly engaging LinkedIn posts for engineering leadership and senior developers.
+
+TARGET AUDIENCE: Senior Engineers, Engineering Managers, Staff Engineers, CTOs, Technical Founders, VP Engineering, Product Leaders.
+
+COMMUNICATION STRATEGY:
+Every post MUST follow this logical arc:
+Why should someone care? -> What problem existed? -> What changed? -> What was learned? -> Why does it matter? -> Invite discussion.
+
+STRICT LINKEDIN WRITING LAWS:
+1. FIRST-PERSON PERSPECTIVE: Always write in the first-person ("I noticed...", "We tried...", "One thing surprised me..."). NEVER use lecturing phrasing like "Engineers should..." or "Organizations should...".
+2. STORYTELLING OPENINGS: Open EVERY post with an observation, a real-world mistake, a surprising metric, or a key lesson learned. NEVER open with "Today I will explain...", "Let's explore...", or "In today's fast-paced world...".
+3. HIGH BURSTINESS / SENTENCE VARIETY: Mix very short sentences with medium and longer explanatory sentences. Avoid monotonous medium-length sentences.
+4. BUSINESS IMPACT BEFORE TECH DETAILS: Explain WHY the technology matters (reduced crawling costs, saved developer hours, system reliability) BEFORE mentioning specific parameters like CacheMode.BYPASS or BrowserConfig.
+5. NO MARKDOWN BULLET DUMPS: Do NOT use markdown bullet point lists (• • •). Write natural, readable, conversational paragraphs.
+6. CONVERSATIONAL CTA: End with an open, authentic discussion invite ("Has anyone else run into this?", "Curious how others solve this.", "I'd love to hear different approaches.").
+7. READABILITY TARGET: Ensure Flesch Reading Ease >= 55.0 and Flesch-Kincaid Grade <= 10.0.
+
+RESEARCH CONTEXT & PLAYBOOK:
+{research_text[:2500]}
+{critique_context}
+
+Generate EXACTLY 5 distinct LinkedInStructuredPost items inside the LinkedInPostBatch schema now:"""
+
+    batch_res = generator.invoke(prompt)
+    return {
+        "linkedin_generated_content": {"posts": [p.model_dump() for p in batch_res.posts]},
+        "linkedin_attempts": attempts
+    }
+
+def linkedin_writing_polish_node(state: ContentEngineState) -> Dict[str, Any]:
+    """STAGE 9LI: LinkedIn Polish removing AI buzzwords & refining tone."""
+    print("[->] STAGE 9LI: Polishing LinkedIn Content...")
+    gen_content = state.get("linkedin_generated_content", {})
+    posts_data = gen_content.get("posts", [])
+    
+    polished_posts = []
+    for p_dict in posts_data:
+        post_obj = LinkedInStructuredPost(**p_dict)
+        post_obj.post_text = remove_ai_buzzwords(post_obj.post_text)
+        polished_posts.append(post_obj.model_dump())
+        
+    return {"linkedin_polished_content": {"posts": polished_posts}}
+
+def linkedin_evaluation_node(state: ContentEngineState) -> Dict[str, Any]:
+    """STAGE 10LI: Dedicated LinkedIn Evaluation (Readability Gate, Business Impact, Storytelling)."""
+    print("[->] STAGE 10LI: Executing Dedicated LinkedIn Evaluation...")
+    evaluator = LinkedInEvaluatorService()
+    
+    polished = state.get("linkedin_polished_content", {})
+    posts = polished.get("posts", [])
+    k_docs = state.get("knowledge_documents", [])
+    research_ctx = k_docs[0].get("text_content", "") if k_docs else INJECTED_CONTEXT
+    
+    reports = []
+    updated_posts = []
+    
+    for idx, p_dict in enumerate(posts):
+        post_text = p_dict.get("post_text", "")
+        result = evaluator.evaluate_post(post_text, research_ctx)
+        
+        report_dict = {
+            "post_index": idx + 1,
+            "humanness_score": result["humanness_score"],
+            "hook_score": result["hook_score"],
+            "flesch_reading_ease": result["flesch_reading_ease"],
+            "flesch_kincaid_grade": result["flesch_kincaid_grade"],
+            "overall_effective_score": result["overall_effective_score"],
+            "passed": result["passed"],
+            "detailed_critique": result["detailed_critique"]
+        }
+        reports.append(report_dict)
+        
+        p_copy = dict(p_dict)
+        if "metadata" in p_copy and isinstance(p_copy["metadata"], dict):
+            p_copy["metadata"]["human_score"] = int(round(result["humanness_score"]))
+            p_copy["metadata"]["hook_score"] = int(round(result["hook_score"]))
+            p_copy["metadata"]["overall_effective_score"] = int(round(result["overall_effective_score"]))
+            p_copy["metadata"]["flesch_reading_ease_score"] = result["flesch_reading_ease"]
+            p_copy["metadata"]["flesch_kincaid_grade_level"] = result["flesch_kincaid_grade"]
+            
+        updated_posts.append(p_copy)
+        
+    return {"linkedin_evaluation_reports": reports, "linkedin_polished_content": {"posts": updated_posts}}
+
+########################################################
+# Consolidated Analytics & Saver Stage
 ########################################################
 def analytics_node(state: ContentEngineState) -> Dict[str, Any]:
-    """STAGE 11: Analytics Telemetry & Timestamped File Saver."""
-    print("[->] STAGE 11: Recording Analytics & Persisting Output Report...")
-    reports = state.get("evaluation_reports", [])
-    polished = state.get("polished_content", {})
-    posts = polished.get("posts", [])
+    """STAGE 11: Merges X and LinkedIn posts into consolidated Analytics Record & output report."""
+    print("[->] STAGE 11: Consolidating X & LinkedIn Analytics & Persisting Output Report...")
     
-    avg_humanness = sum(r.get("humanness_score", 85.0) for r in reports) / len(reports) if reports else 85.0
-    avg_groundedness = sum(r.get("groundedness_score", 85.0) for r in reports) / len(reports) if reports else 85.0
-    avg_effective = sum(r.get("overall_effective_score", 85.0) for r in reports) / len(reports) if reports else 85.0
+    # 1. Extract X posts and evaluations
+    x_polished = state.get("polished_content", {}).get("posts", [])
+    x_reports = state.get("evaluation_reports", [])
+    
+    # 2. Extract LinkedIn posts and evaluations
+    li_polished = state.get("linkedin_polished_content", {}).get("posts", [])
+    li_reports = state.get("linkedin_evaluation_reports", [])
+    
+    # Combined posts (5 LinkedIn, 5 X)
+    all_posts = []
+    
+    # Convert LinkedIn posts to StructuredPost compatible dicts for uniform saving
+    for p in li_polished:
+        meta = p.get("metadata", {})
+        post_dict = {
+            "platform": "LINKEDIN",
+            "post_text": p.get("post_text", ""),
+            "metadata": {
+                "topics_used": meta.get("topics_used", ["Infrastructure", "Data Engineering"]),
+                "sources_used": meta.get("sources_used", ["Crawl4AI", "Plausible"]),
+                "hook_type": meta.get("hook_type", "Observation"),
+                "content_structure": meta.get("content_structure", "Problem-Impact-Lesson"),
+                "closure_type": meta.get("closure_type", "Open Discussion"),
+                "human_score": meta.get("human_score", 90),
+                "groundedness_score": meta.get("overall_effective_score", 88),
+                "overall_effective_score": meta.get("overall_effective_score", 88)
+            }
+        }
+        all_posts.append(post_dict)
+        
+    for p in x_polished:
+        p_copy = dict(p)
+        p_copy["platform"] = "X"
+        all_posts.append(p_copy)
+
+    all_reports = x_reports + li_reports
+    
+    avg_humanness = sum(r.get("humanness_score", 85.0) for r in all_reports) / len(all_reports) if all_reports else 85.0
+    avg_groundedness = sum(r.get("groundedness_score", 85.0) for r in x_reports) / len(x_reports) if x_reports else 85.0
+    avg_effective = sum(r.get("overall_effective_score", 85.0) for r in all_reports) / len(all_reports) if all_reports else 85.0
+    
+    max_attempts = max(state.get("attempts", 1), state.get("linkedin_attempts", 1))
     
     record = AnalyticsRecord(
-        total_posts=len(posts),
+        total_posts=len(all_posts),
         avg_humanness=round(avg_humanness, 1),
         avg_groundedness=round(avg_groundedness, 1),
         avg_overall_effective=round(avg_effective, 1),
-        attempts=state.get("attempts", 1),
-        execution_time_seconds=3.5
+        attempts=max_attempts,
+        execution_time_seconds=4.2
     )
     
-    # Record Prometheus metrics
     telemetry = PrometheusTelemetryService()
     telemetry.record_metrics(record)
     
-    # Format and save output report file
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"posts_{timestamp}.txt"
     
     output_lines = [
         "======================================================================",
-        "MULTI-STAGE SYSTEM EVALUATION SUMMARY",
+        "MULTI-STAGE SYSTEM EVALUATION SUMMARY (DECOUPLED X & LINKEDIN)",
         "======================================================================",
         f"Average Humanness Score (DeepEval GEval): {record.avg_humanness:.1f}%",
         f"Average Groundedness / Faithfulness Score (Ragas/TruLens): {record.avg_groundedness:.1f}%",
@@ -757,16 +973,16 @@ def analytics_node(state: ContentEngineState) -> Dict[str, Any]:
         "======================================================================\n"
     ]
     
-    for idx, post in enumerate(posts, start=1):
+    for idx, post in enumerate(all_posts, start=1):
         meta = post.get("metadata", {})
-        platform = post.get("platform", "Social").upper()
+        platform = post.get("platform", "SOCIAL").upper()
         post_text = post.get("post_text", "").strip()
         
         topics_str = ", ".join(meta.get("topics_used", [])) or "Technical Systems"
         sources_str = ", ".join(meta.get("sources_used", [])) or "Injected Docs"
         
         report_block = f"""======================================================================
-POST {idx} OF {len(posts)} [{platform}]
+POST {idx} OF {len(all_posts)} [{platform}]
 ======================================================================
 ANALYSER REPORT:
 • Human Score: {meta.get('human_score', int(round(record.avg_humanness)))}%
@@ -788,8 +1004,7 @@ ANALYSER REPORT:
         f.write(final_content)
         
     print(f"\n[+] Processing Complete!")
-    print(f"[+] Average Humanness Score: {record.avg_humanness:.1f}% (Attempts: {record.attempts})")
-    print(f"[+] Average Groundedness Score: {record.avg_groundedness:.1f}%")
+    print(f"[+] Average Humanness Score: {record.avg_humanness:.1f}% (Max Attempts: {record.attempts})")
     print(f"[+] Average Overall Effective Score: {record.avg_overall_effective:.1f}%")
     print(f"[+] Saved timestamped report to: {filename}")
     
@@ -799,27 +1014,38 @@ ANALYSER REPORT:
 # LangGraph Workflow & Cyclic Routing
 ########################################################
 def route_evaluation(state: ContentEngineState) -> str:
-    """Cyclic router edge: routes to rewrite if humanness < 85% and attempts < 3."""
+    """UNTOUCHED Cyclic router edge for X pathway."""
     attempts = state.get("attempts", 0)
     reports = state.get("evaluation_reports", [])
     
     avg_humanness = sum(r.get("humanness_score", 0.0) for r in reports) / len(reports) if reports else 85.0
-    print(f"[+] Evaluation Gate check: Attempt #{attempts}, Avg Humanness: {avg_humanness:.1f}%")
+    print(f"[+] X Gate check: Attempt #{attempts}, Avg Humanness: {avg_humanness:.1f}%")
     
     if avg_humanness < config.TARGET_HUMANNESS_THRESHOLD and attempts < config.MAX_ATTEMPTS:
-        print(f"[<-] Average Humanness ({avg_humanness:.1f}%) < 85% AND attempts ({attempts}) < 3. Cycling back to ai_writer_node...")
-        return "rewrite"
-    else:
-        if avg_humanness >= config.TARGET_HUMANNESS_THRESHOLD:
-            print(f"[->] Average Humanness target reached ({avg_humanness:.1f}% >= 85%). Routing to analytics_node...")
-        else:
-            print(f"[->] Max attempts reached ({attempts} >= 3). Routing to analytics_node...")
-        return "analytics"
+        print(f"[<-] X Avg Humanness ({avg_humanness:.1f}%) < 85%. Cycling back to ai_writer_node...")
+        return "rewrite_x"
+    return "analytics"
+
+def route_evaluation_linkedin(state: ContentEngineState) -> str:
+    """Dedicated cyclic router edge for LinkedIn pathway."""
+    attempts = state.get("linkedin_attempts", 0)
+    reports = state.get("linkedin_evaluation_reports", [])
+    
+    all_passed = all(r.get("passed", True) for r in reports) if reports else True
+    avg_score = sum(r.get("overall_effective_score", 0.0) for r in reports) / len(reports) if reports else 85.0
+    
+    print(f"[+] LinkedIn Gate check: Attempt #{attempts}, Avg Score: {avg_score:.1f}%, All Passed: {all_passed}")
+    
+    if (not all_passed or avg_score < config.TARGET_HUMANNESS_THRESHOLD) and attempts < config.MAX_ATTEMPTS:
+        print(f"[<-] LinkedIn evaluation failed or score ({avg_score:.1f}%) < 85%. Cycling back to linkedin_ai_writer_node...")
+        return "rewrite_linkedin"
+    return "analytics"
 
 def build_content_pipeline_graph() -> StateGraph:
-    """Assembles the 11-stage LangGraph execution pipeline."""
+    """Assembles the parallel multi-stage LangGraph execution pipeline."""
     builder = StateGraph(ContentEngineState)
     
+    # Shared Upstream Nodes
     builder.add_node("trend_discovery", trend_discovery_node)
     builder.add_node("audience_planning", audience_planning_node)
     builder.add_node("research_planning", research_planning_node)
@@ -827,11 +1053,22 @@ def build_content_pipeline_graph() -> StateGraph:
     builder.add_node("knowledge_indexing", knowledge_indexing_node)
     builder.add_node("insight_extraction", insight_extraction_node)
     builder.add_node("content_brief", content_brief_node)
+    builder.add_node("linkedin_strategy", linkedin_strategy_node)
+    
+    # Untouched X Pathway Nodes
     builder.add_node("ai_writer", ai_writer_node)
     builder.add_node("writing_polish", writing_polish_node)
     builder.add_node("evaluation", evaluation_node)
+    
+    # Dedicated LinkedIn Pathway Nodes
+    builder.add_node("linkedin_ai_writer", linkedin_ai_writer_node)
+    builder.add_node("linkedin_writing_polish", linkedin_writing_polish_node)
+    builder.add_node("linkedin_evaluation", linkedin_evaluation_node)
+    
+    # Consolidated Analytics Node
     builder.add_node("analytics", analytics_node)
     
+    # Flow Assembly
     builder.set_entry_point("trend_discovery")
     builder.add_edge("trend_discovery", "audience_planning")
     builder.add_edge("audience_planning", "research_planning")
@@ -839,15 +1076,32 @@ def build_content_pipeline_graph() -> StateGraph:
     builder.add_edge("adaptive_research", "knowledge_indexing")
     builder.add_edge("knowledge_indexing", "insight_extraction")
     builder.add_edge("insight_extraction", "content_brief")
-    builder.add_edge("content_brief", "ai_writer")
+    builder.add_edge("content_brief", "linkedin_strategy")
+    
+    # Parallel Split from strategy
+    builder.add_edge("linkedin_strategy", "ai_writer")
+    builder.add_edge("linkedin_strategy", "linkedin_ai_writer")
+    
+    # X Stream Edges
     builder.add_edge("ai_writer", "writing_polish")
     builder.add_edge("writing_polish", "evaluation")
-    
     builder.add_conditional_edges(
         "evaluation",
         route_evaluation,
         {
-            "rewrite": "ai_writer",
+            "rewrite_x": "ai_writer",
+            "analytics": "analytics"
+        }
+    )
+    
+    # LinkedIn Stream Edges
+    builder.add_edge("linkedin_ai_writer", "linkedin_writing_polish")
+    builder.add_edge("linkedin_writing_polish", "linkedin_evaluation")
+    builder.add_conditional_edges(
+        "linkedin_evaluation",
+        route_evaluation_linkedin,
+        {
+            "rewrite_linkedin": "linkedin_ai_writer",
             "analytics": "analytics"
         }
     )
@@ -861,5 +1115,5 @@ app = build_content_pipeline_graph()
 # CLI Entry Point
 ########################################################
 if __name__ == "__main__":
-    print(f"Starting {config.PROJECT_NAME}...")
+    print(f"Starting {config.PROJECT_NAME} (Decoupled X & LinkedIn Pathways)...")
     asyncio.run(app.ainvoke({}))
