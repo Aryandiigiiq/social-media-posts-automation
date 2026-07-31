@@ -411,44 +411,127 @@ def format_linkedin_paragraphs(text: str) -> str:
 # CREWAI MULTI-PERSONA REVIEW SERVICE
 ########################################################
 class CrewAIPersonaReviewService:
-    """Multi-Agent Persona Review Engine evaluating posts across Non-Tech Exec, Tech Architect, and Growth personas."""
+    """Multi-Agent Persona Review Engine evaluating posts across Non-Tech Exec, Tech Architect, and Growth personas with GRADIENT scoring."""
     
     def evaluate_with_personas(self, post_text: str) -> Dict[str, Any]:
-        """Runs multi-agent persona evaluation."""
+        """Runs multi-agent persona evaluation with gradient (not binary) scores."""
         critiques = []
+        t_lower = post_text.lower()
         
-        # Aidan Nguyen Tran Opening Sentence Hook Check (Must be <= 10 words)
-        first_sentence = re.split(r'[.!?]', post_text)[0].strip()
+        # Shared signal detection
+        first_line = post_text.strip().split('\n')[0].strip()
+        first_sentence = re.split(r'[.!?]', first_line)[0].strip()
         first_sentence_words = len(first_sentence.split())
-        has_weak_intro = bool(re.search(r'\b(in the world|automation is|as technology|today i will|let\'s explore)\b', first_sentence, re.I))
-        
+        has_weak_intro = bool(re.search(r'\b(in the world|automation is|as technology|today i will|let\'s explore|in today)\b', first_sentence, re.I))
         hook_punchy = (first_sentence_words <= 10 and not has_weak_intro)
         
-        # 1. Non-Technical Executive Persona Check (VP / Founder / CEO)
-        has_jargon_barrier = bool(re.search(r'(BrowserConfig|CacheMode\.BYPASS|SimilarityTopK|PruningContentFilter)', post_text))
-        has_analogy = bool(re.search(r'\b(like a|think of|meaning|in simple terms|which allows us|analogous|pantry|traffic)\b', post_text, re.I))
-        exec_score = 94.0 if (has_analogy and not has_jargon_barrier and hook_punchy) else 78.5
-        if not has_analogy:
-            critiques.append("Executive Persona Note: Add a real-world analogy to make technical concept understandable for non-technical leaders.")
-        if not hook_punchy:
-            critiques.append(f"Executive Persona Note: Opening hook sentence is too long ({first_sentence_words} words). Make first line under 10 words (Aidan Nguyen Tran style).")
-            
-        # 2. Senior Technical Architect Persona Check
-        has_tech_substance = bool(re.search(r'(ai|robotics|automation|real world|marketing|system|cost|data|workflow)', post_text, re.I))
-        tech_score = 95.0 if has_tech_substance else 76.0
-        if not has_tech_substance:
-            critiques.append("Architect Persona Note: Include real-world automation mechanisms and practical impact metrics.")
-
-        # 3. Growth & Networking Persona Check (Subtle Soft Marketing & Hook Strength)
-        has_networking_cta = bool(re.search(r'(\?|connect|discuss|thoughts|how is your|let\'s|share)', post_text, re.I))
-        growth_score = 93.5 if (hook_punchy and has_networking_cta) else 77.0
-        if not has_networking_cta:
-            critiques.append("Growth Persona Note: Add a subtle networking invitation CTA at the closure.")
-            
+        paragraphs = [p.strip() for p in post_text.split('\n\n') if p.strip()]
+        para_count = len(paragraphs)
+        word_count = len(post_text.split())
+        has_question = bool(re.search(r'\?', post_text))
+        
+        # =============================================
+        # 1. Non-Technical Executive Persona (Gradient)
+        # =============================================
+        exec_score = 70.0  # Base
+        
+        # Analogy bonus (0-10): Multiple patterns checked
+        analogy_patterns = [r'\blike a\b', r'\bthink of\b', r'\bin simple terms\b', r'\bwhich allows\b',
+                           r'\banalogous\b', r'\bimagine\b', r'\bpicture\b', r'\bas if\b',
+                           r'\bjust like\b', r'\bsimilar to\b', r'\bthe same way\b', r'\bit\'s like\b']
+        analogy_count = sum(1 for p in analogy_patterns if re.search(p, t_lower))
+        analogy_bonus = min(10.0, analogy_count * 4.0)
+        exec_score += analogy_bonus
+        if analogy_count == 0:
+            critiques.append("MINOR: Executive Persona — Add a real-world analogy (e.g., 'It's like...', 'Think of it as...') for non-technical leaders.")
+        
+        # Hook bonus (0-8)
+        if hook_punchy:
+            exec_score += 8.0
+        elif first_sentence_words <= 12:
+            exec_score += 4.0
+        else:
+            critiques.append(f"CRITICAL: Executive Persona — Opening hook is {first_sentence_words} words. Must be under 10 words (Aidan Nguyen Tran style).")
+        
+        # Jargon penalty (0 to -12)
+        jargon_hits = len(re.findall(r'(BrowserConfig|CacheMode|SimilarityTopK|PruningContentFilter|AsyncWebCrawler|CrawlerRunConfig)', post_text))
+        if jargon_hits > 0:
+            exec_score -= min(12.0, jargon_hits * 4.0)
+            critiques.append(f"MINOR: Executive Persona — Found {jargon_hits} raw code references. Replace with business-friendly language.")
+        
+        # Reading ease bonus (0-7): longer readable posts score higher
+        if word_count >= 100 and para_count >= 3:
+            exec_score += 7.0
+        elif word_count >= 60:
+            exec_score += 4.0
+        
+        exec_score = round(max(55.0, min(98.0, exec_score)), 1)
+        
+        # =============================================
+        # 2. Senior Technical Architect Persona (Gradient)
+        # =============================================
+        tech_score = 70.0  # Base
+        
+        # Substance depth (0-12): tech topics mentioned
+        tech_terms = ['ai', 'automation', 'system', 'data', 'workflow', 'architecture', 'pipeline',
+                     'api', 'integration', 'latency', 'throughput', 'scalab', 'deploy', 'production',
+                     'real-time', 'streaming', 'rag', 'agent', 'model', 'prompt']
+        tech_hits = sum(1 for t in tech_terms if t in t_lower)
+        tech_depth_bonus = min(12.0, tech_hits * 1.5)
+        tech_score += tech_depth_bonus
+        if tech_hits < 3:
+            critiques.append("MINOR: Architect Persona — Include more technical substance (system architecture, workflows, metrics).")
+        
+        # Metric bonus (0-8): concrete numbers
+        metric_hits = len(re.findall(r'\d+[%$]|\$[\d,]+|\d+\.\d+|\d+ (?:hours|days|weeks|ms|seconds)', post_text))
+        tech_score += min(8.0, metric_hits * 3.0)
+        
+        # Architecture mention bonus (0-5)
+        arch_hits = len(re.findall(r'(?:architect|built|engineered|designed|implemented|shipped|deployed|integrated)', t_lower))
+        tech_score += min(5.0, arch_hits * 2.0)
+        
+        # DIGIiq system reference bonus (0-5)
+        digiiq_refs = len(re.findall(r'(?:digiiq|at digiiq|here at digiiq|digiiq core)', t_lower))
+        tech_score += min(5.0, digiiq_refs * 2.5)
+        
+        tech_score = round(max(55.0, min(98.0, tech_score)), 1)
+        
+        # =============================================
+        # 3. Growth & Networking Persona (Gradient)
+        # =============================================
+        growth_score = 70.0  # Base
+        
+        # Hook bonus (0-10)
+        if hook_punchy:
+            growth_score += 10.0
+        elif first_sentence_words <= 12:
+            growth_score += 5.0
+        
+        # CTA / networking bonus (0-8)
+        cta_patterns = [r'\bconnect\b', r'\bdiscuss\b', r'\bthoughts\b', r'\bhow is your\b',
+                       r'\blet\'s\b', r'\bshare\b', r'\bwhat do you\b', r'\breach out\b',
+                       r'\bjoin\b', r'\bfollow\b', r'\bwhat if\b', r'\bhave you\b']
+        cta_count = sum(1 for p in cta_patterns if re.search(p, t_lower))
+        cta_bonus = min(8.0, cta_count * 3.0)
+        growth_score += cta_bonus
+        if cta_count == 0 and not has_question:
+            critiques.append("MINOR: Growth Persona — Add a subtle networking CTA or discussion question at the closure.")
+        
+        # Question bonus (0-5): ending with a question is strong
+        if has_question:
+            growth_score += 5.0
+        
+        # Personal narrative bonus (0-7): first-person founder voice
+        narrative_patterns = [r'\bwe\b', r'\bour\b', r'\bi\b', r'\bmy\b', r'\bwe\'ve\b', r'\bwe built\b', r'\bour team\b']
+        narrative_count = sum(1 for p in narrative_patterns if re.search(p, t_lower))
+        growth_score += min(7.0, narrative_count * 1.5)
+        
+        growth_score = round(max(55.0, min(98.0, growth_score)), 1)
+        
         return {
-            "exec_score": round(exec_score, 1),
-            "tech_score": round(tech_score, 1),
-            "growth_score": round(growth_score, 1),
+            "exec_score": exec_score,
+            "tech_score": tech_score,
+            "growth_score": growth_score,
             "composite_engagement": round((exec_score * 0.4) + (growth_score * 0.4) + (tech_score * 0.2), 1),
             "critiques": critiques
         }
@@ -693,7 +776,7 @@ class MultiFrameworkEvaluatorService:
         )
 
 class LinkedInEvaluatorService:
-    """DYNAMIC MULTI-METRIC Evaluator combining AIPredictabilityAnalyzerService and CrewAIPersonaReviewService."""
+    """DYNAMIC MULTI-METRIC Evaluator combining AIPredictabilityAnalyzerService and CrewAIPersonaReviewService with SCORE-THRESHOLD gate."""
     def evaluate_post(self, post_text: str, research_context: str) -> Dict[str, Any]:
         readability_service = ReadabilityService()
         spacy_service = LinguisticAnalysisService()
@@ -715,11 +798,14 @@ class LinkedInEvaluatorService:
         
         critiques = list(ai_analysis["critiques"]) + persona_review["critiques"]
         
+        # Only add CRITICAL formatting/readability issues — these block passage
         if para_count < 3:
-            critiques.append("Formatting issue: Post is a continuous text wall. Format into 3-5 short paragraphs with double line breaks.")
+            critiques.append("CRITICAL: Formatting — Post is a continuous text wall. Format into 3-5 short paragraphs with double line breaks.")
             
-        if ease < 60.0 or grade > 9.0:
-            critiques.append("Clarity issue: Sentence structure too dense for non-technical readers. Simplify phrasing and increase readability score (Ease >= 60, Grade <= 9).")
+        if ease < 50.0 or grade > 11.0:
+            critiques.append("CRITICAL: Clarity — Sentence structure too dense for non-technical readers. Simplify phrasing.")
+        elif ease < 60.0 or grade > 9.0:
+            critiques.append("MINOR: Clarity — Consider simplifying sentence structure for broader readability (Ease >= 60, Grade <= 9).")
             
         accessibility_score = persona_review["exec_score"]
         engagement_score = persona_review["growth_score"]
@@ -738,8 +824,26 @@ class LinkedInEvaluatorService:
                 pass
 
         overall_score = max(50.0, min(98.5, (anti_ai_score * 0.4) + (accessibility_score * 0.35) + (engagement_score * 0.25)))
-        passed = (ease >= 60.0 and grade <= 9.0 and para_count >= 3 and anti_ai_score >= 82.0 and len(critiques) == 0)
-        detailed_critique = "; ".join(critiques) if critiques else "Passed all CrewAI multi-persona, accessibility, anti-AI predictability, and Wikipedia signs gates."
+        
+        # FIXED GATE: Score-threshold based, only CRITICAL critiques block passage
+        critical_count = sum(1 for c in critiques if c.startswith("CRITICAL:"))
+        passed = (
+            overall_score >= 82.0
+            and anti_ai_score >= 78.0
+            and ease >= 55.0
+            and grade <= 10.0
+            and para_count >= 3
+            and critical_count == 0
+        )
+        
+        if passed:
+            minor_notes = [c for c in critiques if c.startswith("MINOR:")]
+            if minor_notes:
+                detailed_critique = "PASSED (with advisory notes): " + "; ".join(minor_notes)
+            else:
+                detailed_critique = "Passed all CrewAI multi-persona, accessibility, anti-AI predictability, and Wikipedia signs gates."
+        else:
+            detailed_critique = "; ".join(critiques) if critiques else f"Overall score {overall_score:.1f}% below 82.0% threshold."
         
         return {
             "accessibility_score": round(accessibility_score, 1),
@@ -1149,16 +1253,45 @@ def evaluation_node(state: ContentEngineState) -> Dict[str, Any]:
 # MANDATORY AIDAN NGUYEN TRAN STYLE LINKEDIN WRITER
 ########################################################
 def linkedin_ai_writer_method1_node(state: ContentEngineState) -> Dict[str, Any]:
-    """STAGE 8LI: LinkedIn Writer generating 5 posts strictly adhering to Aidan Nguyen Tran's Signature Founder-Led Style."""
+    """STAGE 8LI: LinkedIn Writer with self-learning structured feedback loop."""
     attempts = state.get("linkedin_m1_attempts", 0) + 1
     print(f"[->] STAGE 8LI: Generating 5 LinkedIn posts in Mandatory Aidan Nguyen Tran Signature Style (Attempt #{attempts})...")
     
+    # SELF-LEARNING FEEDBACK: Structured, actionable per-post fix instructions
     critique_context = ""
     if attempts > 1 and state.get("linkedin_m1_evaluation_reports"):
-        critique_context = "\nPREVIOUS EVALUATION REWRITE FEEDBACK (CREWAI MULTI-PERSONA & PREDICTABILITY AUDIT):\n" + "\n".join(
-            f"Post #{idx + 1}: {ev.get('detailed_critique', 'N/A')}"
-            for idx, ev in enumerate(state["linkedin_m1_evaluation_reports"])
-        )
+        all_reports = state["linkedin_m1_evaluation_reports"]
+        failed_reports = [r for r in all_reports if not r.get("passed", True)]
+        passed_reports = [r for r in all_reports if r.get("passed", True)]
+        
+        fix_instructions = []
+        for r in failed_reports:
+            critique = r.get("detailed_critique", "")
+            fixes = []
+            if "analogy" in critique.lower():
+                fixes.append("ADD a concrete real-world analogy (e.g., 'It's like giving your team...', 'Think of it as...')")
+            if "hook" in critique.lower() or "opening" in critique.lower():
+                fixes.append("SHORTEN opening hook to under 10 words, make it standalone on line 1")
+            if "networking" in critique.lower() or "cta" in critique.lower():
+                fixes.append("ADD a discussion question or networking invitation at the end")
+            if "formatting" in critique.lower() or "paragraph" in critique.lower() or "text wall" in critique.lower():
+                fixes.append("FORMAT into 4-6 short paragraphs separated by double line breaks")
+            if "ai sign" in critique.lower() or "vocabulary" in critique.lower():
+                fixes.append("REMOVE flagged AI vocabulary words and replace with natural conversational language")
+            if "clarity" in critique.lower() or "dense" in critique.lower():
+                fixes.append("SIMPLIFY sentence structure — shorter sentences, more active voice")
+            if "technical" in critique.lower() or "substance" in critique.lower():
+                fixes.append("ADD more technical substance — system architecture details, specific metrics, operational workflows")
+            fix_instructions.append(
+                f"Post #{r['post_index']}: Score={r.get('overall_effective_score', 0):.1f}% (Anti-AI: {r.get('anti_ai_score', 0):.1f}%) | "
+                f"REQUIRED FIXES: {'; '.join(fixes) if fixes else 'Improve overall quality to reach 82% threshold'}"
+            )
+        
+        if fix_instructions:
+            critique_context = f"\n\nSELF-LEARNING REWRITE INSTRUCTIONS ({len(failed_reports)} of {len(all_reports)} posts FAILED, {len(passed_reports)} PASSED):\n"
+            critique_context += "FOCUS YOUR REWRITE EFFORT ON THESE FAILED POSTS:\n"
+            critique_context += "\n".join(fix_instructions)
+            critique_context += "\n\nFor posts that already passed, maintain similar quality and style.\n"
 
     k_docs = state.get("knowledge_documents", [])
     research_text = k_docs[0].get("text_content", "") if k_docs else INJECTED_CONTEXT
@@ -1208,7 +1341,16 @@ MANDATORY AIDAN NGUYEN TRAN SIGNATURE STYLE BLUEPRINT (DEEP SYSTEM FORM & HOOK L
 
 9. STRICT WIKIPEDIA ANTI-AI SIGNS BAN: Never use AI vocabulary ("delve", "tapestry", "testament", "game-changer", "landscape", "pivotal", "foster", "garner", "vibrant"). Never end with formulaic summary conclusions.
 
-10. METADATA MAPPING: Accurately set style, topics_used, hook_type, content_structure, closure_type, business_value_focus, and generation_method = 'DIGIiq Hybrid Topic Engine'.
+10. QUALITY GATES TO PASS (your posts will be evaluated against these thresholds):
+    - Overall effective score must be >= 82.0%
+    - Anti-AI humanness score must be >= 78.0%
+    - Each post MUST have >= 3 paragraphs separated by double line breaks
+    - Opening hook MUST be under 10 words and standalone on line 1
+    - MUST include at least one real-world analogy per post
+    - MUST end with a question or networking CTA
+    - MUST include concrete metrics (%, $, hours, latency numbers)
+
+11. METADATA MAPPING: Accurately set style, topics_used, hook_type, content_structure, closure_type, business_value_focus, and generation_method = 'DIGIiq Hybrid Topic Engine'.
 
 DISCOVERED HYBRID TOPICS:
 {json.dumps([t.get('title') for t in state.get('trending_topics', [])], indent=2)}
@@ -1247,8 +1389,8 @@ def linkedin_writing_polish_m1_node(state: ContentEngineState) -> Dict[str, Any]
     return {"linkedin_m1_polished_content": {"posts": polished_posts}}
 
 def linkedin_evaluation_m1_node(state: ContentEngineState) -> Dict[str, Any]:
-    """STAGE 10LI: Evaluator for LinkedIn with CrewAI Multi-Persona Review & 100% Dynamic Direct Score Output."""
-    print("[->] STAGE 10LI: Executing CrewAI Multi-Persona & 100% Dynamic Direct Score Evaluation on LinkedIn Posts...")
+    """STAGE 10LI: Evaluator for LinkedIn with CrewAI Multi-Persona Review & SCORE-THRESHOLD gate."""
+    print("[->] STAGE 10LI: Executing CrewAI Multi-Persona & Score-Threshold Evaluation on LinkedIn Posts...")
     evaluator = LinkedInEvaluatorService()
     polished = state.get("linkedin_m1_polished_content", {}).get("posts", [])
     k_docs = state.get("knowledge_documents", [])
@@ -1257,11 +1399,15 @@ def linkedin_evaluation_m1_node(state: ContentEngineState) -> Dict[str, Any]:
     
     reports = []
     updated_posts = []
+    passed_count = 0
     for idx, p_dict in enumerate(polished):
         post_text = p_dict.get("post_text", "")
         result = evaluator.evaluate_post(post_text, research_ctx)
         
-        is_unfit = (not result["passed"] or result["anti_ai_score"] < 82.0) and attempts >= config.MAX_ATTEMPTS
+        # FIXED: is_unfit only when genuinely failed AND exhausted all retries
+        is_unfit = not result["passed"] and attempts >= config.MAX_ATTEMPTS
+        if result["passed"]:
+            passed_count += 1
         
         report_dict = {
             "post_index": idx + 1,
@@ -1292,7 +1438,8 @@ def linkedin_evaluation_m1_node(state: ContentEngineState) -> Dict[str, Any]:
             p_copy["metadata"]["is_unfit"] = is_unfit
             
         updated_posts.append(p_copy)
-        
+    
+    print(f"[+] STAGE 10LI Result: {passed_count}/{len(polished)} posts PASSED the score-threshold gate.")
     return {"linkedin_m1_evaluation_reports": reports, "linkedin_m1_polished_content": {"posts": updated_posts}}
 
 ########################################################
@@ -1458,17 +1605,23 @@ def route_evaluation(state: ContentEngineState) -> str:
     return "analytics"
 
 def route_evaluation_linkedin_m1(state: ContentEngineState) -> str:
-    """INDIVIDUAL POST-LEVEL cyclic router edge for LinkedIn Story Stream."""
+    """INDIVIDUAL POST-LEVEL cyclic router edge for LinkedIn Story Stream using score-threshold gate."""
     attempts = state.get("linkedin_m1_attempts", 0)
     reports = state.get("linkedin_m1_evaluation_reports", [])
     
-    all_passed = all(r.get("passed", True) and r.get("anti_ai_score", 0.0) >= 82.0 for r in reports) if reports else True
-    failed_indices = [r.get("post_index", i+1) for i, r in enumerate(reports) if not r.get("passed", True) or r.get("anti_ai_score", 0.0) < 82.0]
+    # Use the evaluator's own `passed` field (now score-threshold based)
+    all_passed = all(r.get("passed", True) for r in reports) if reports else True
+    failed_indices = [r.get("post_index", i+1) for i, r in enumerate(reports) if not r.get("passed", True)]
+    passed_count = sum(1 for r in reports if r.get("passed", True))
     
-    print(f"[+] LinkedIn Post-Level Gate check: Attempt #{attempts}, Failed Post Indices: {failed_indices}")
+    print(f"[+] LinkedIn Gate: Attempt #{attempts}, Passed: {passed_count}/{len(reports)}, Failed Indices: {failed_indices}")
     if not all_passed and attempts < config.MAX_ATTEMPTS:
-        print(f"[<-] Individual LinkedIn posts failed anti-AI/CrewAI gate: {failed_indices}. Cycling back for targeted rewrite...")
+        print(f"[<-] {len(failed_indices)} LinkedIn posts failed score-threshold gate. Cycling back for self-learning rewrite...")
         return "rewrite_linkedin_m1"
+    if all_passed:
+        print(f"[✓] All {len(reports)} LinkedIn posts PASSED the score-threshold gate!")
+    else:
+        print(f"[!] Max attempts ({config.MAX_ATTEMPTS}) reached. {len(failed_indices)} posts remain below threshold.")
     return "analytics"
 
 def build_content_pipeline_graph() -> StateGraph:
