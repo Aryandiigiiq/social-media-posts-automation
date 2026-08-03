@@ -93,7 +93,7 @@ load_dotenv()
 # Configuration
 ########################################################
 class SystemConfig:
-    PROJECT_NAME: str = "DIGIiq Solution Hybrid AI Content Engineering Platform"
+    PROJECT_NAME: str = "Multi-Stage AI Content Engineering Platform"
     GEMINI_MODEL: str = "gemini-2.5-flash"
     TARGET_HUMANNESS_THRESHOLD: float = 85.0
     MAX_ATTEMPTS: int = 3
@@ -103,6 +103,7 @@ class SystemConfig:
     TARGET_COMPANY_NAME: str = "DIGIiq Solution Private Limited"
     TARGET_PROFILE_URL: str = "https://www.linkedin.com/company/digiiq-solution-private-limited/posts/?feedView=all"
     TARGET_WEBSITE: str = "https://digiiq.com"
+    HISTORY_FILE_PATH: str = "history.txt"
 
 config = SystemConfig()
 
@@ -119,7 +120,7 @@ llm_evaluator = ChatGoogleGenerativeAI(
     temperature=0.0
 )
 
-# Ingested DIGIiq Solution Profile Context & Post Samples (https://www.linkedin.com/company/digiiq-solution-private-limited/posts/?feedView=all)
+# Ingested DIGIiq Solution Profile Context & Post Samples
 DIGIIQ_PROFILE_CORPUS = [
     {
         "url": "https://www.linkedin.com/posts/digiiq-solution-private-limited_aichatbot-businessautomation-customerexperience-activity-7484918053097455616-4dUk",
@@ -176,9 +177,9 @@ VIRAL_LINKEDIN_CORPUS = [
 
 # Dynamic Fallback Research Snippets
 INJECTED_CONTEXT = """
-### 1. Real-World AI & Automation Context
+### 1. Real-World AI & Automation Context (DIGIiq Infrastructure)
 Real-world AI systems integrate physical sensors, intelligent software agents, and automated data pipelines.
-Focuses on operational speed, error reduction, and marketing scalability.
+At DIGIiq Solution Private Limited, we build end-to-end AI chatbots and business automation workflows.
 
 ### 2. Robotics & Hardware-Software Integration
 Robotics automation bridges real-world physical operations with intelligent decision-making software.
@@ -208,7 +209,7 @@ class TrendingTopic(BaseModel):
     domain: str = Field(default="AI Chatbots, Business Automation, Customer Experience, Prompt Engineering, Digital Transformation", description="Technical domain classification.")
     hashtags: List[str] = Field(default_factory=lambda: ["#digiiq", "#aichatbot", "#businessautomation", "#customerexperience", "#promptengineering", "#digitaltransformation"])
     score: float = Field(default=96.5, description="Relevance and viral interest score (0-100).")
-    source_query: str = Field(default="DIGIiq Solution AI chatbot prompt engineering business automation", description="Search query used to discover the trend.")
+    source_query: str = Field(default="AI Robotics Real World Automation Marketing", description="Search query used to discover the trend.")
     discovered_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 class AudienceBlueprint(BaseModel):
@@ -289,7 +290,7 @@ class LinkedInPostMetadata(BaseModel):
     closure_type: str = Field(description="Rotated closure style (Reflection, Lesson Learned, Business Takeaway, Recommendation, Discussion Invitation).")
     business_value_focus: str = Field(description="Primary soft-marketing networking value highlighted.")
     story_narrative_type: str = Field(description="First-person narrative style used.")
-    generation_method: str = Field(default="Aidan Nguyen Tran Signature Engine", description="Optimization method used.")
+    generation_method: str = Field(default="DIGIiq Aidan Engine", description="Optimization method used.")
     word_count: int = Field(default=180, description="Word count of the post.")
     paragraph_count: int = Field(default=4, ge=1, le=10, description="Number of distinct paragraphs formatted.")
     flesch_reading_ease_score: float = Field(default=65.0, description="TextStat Flesch Reading Ease score.")
@@ -335,6 +336,18 @@ class AnalyticsRecord(BaseModel):
 ########################################################
 # Utility Functions
 ########################################################
+def load_history_context() -> str:
+    """Loads historical post context from history.txt to enforce non-duplication and non-contradiction."""
+    if os.path.exists(config.HISTORY_FILE_PATH):
+        try:
+            with open(config.HISTORY_FILE_PATH, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                if content:
+                    return content
+        except Exception as e:
+            print(f"[!] Warning reading history.txt: {e}")
+    return ""
+
 def perform_web_search(query: str) -> str:
     """Multi-tiered resilient web search function."""
     try:
@@ -430,36 +443,28 @@ class CrewAIPersonaReviewService:
         word_count = len(post_text.split())
         has_question = bool(re.search(r'\?', post_text))
         
-        # =============================================
-        # 1. Non-Technical Executive Persona (Gradient)
-        # =============================================
-        exec_score = 70.0  # Base
-        
-        # Analogy bonus (0-10): Multiple patterns checked
+        # 1. Non-Technical Executive Persona
+        exec_score = 70.0
         analogy_patterns = [r'\blike a\b', r'\bthink of\b', r'\bin simple terms\b', r'\bwhich allows\b',
                            r'\banalogous\b', r'\bimagine\b', r'\bpicture\b', r'\bas if\b',
                            r'\bjust like\b', r'\bsimilar to\b', r'\bthe same way\b', r'\bit\'s like\b']
         analogy_count = sum(1 for p in analogy_patterns if re.search(p, t_lower))
-        analogy_bonus = min(10.0, analogy_count * 4.0)
-        exec_score += analogy_bonus
+        exec_score += min(10.0, analogy_count * 4.0)
         if analogy_count == 0:
-            critiques.append("MINOR: Executive Persona — Add a real-world analogy (e.g., 'It's like...', 'Think of it as...') for non-technical leaders.")
+            critiques.append("MINOR: Executive Persona — Add a real-world analogy for non-technical leaders.")
         
-        # Hook bonus (0-8)
         if hook_punchy:
             exec_score += 8.0
         elif first_sentence_words <= 12:
             exec_score += 4.0
         else:
-            critiques.append(f"CRITICAL: Executive Persona — Opening hook is {first_sentence_words} words. Must be under 10 words (Aidan Nguyen Tran style).")
+            critiques.append(f"CRITICAL: Executive Persona — Opening hook is {first_sentence_words} words. Must be under 10 words.")
         
-        # Jargon penalty (0 to -12)
         jargon_hits = len(re.findall(r'(BrowserConfig|CacheMode|SimilarityTopK|PruningContentFilter|AsyncWebCrawler|CrawlerRunConfig)', post_text))
         if jargon_hits > 0:
             exec_score -= min(12.0, jargon_hits * 4.0)
             critiques.append(f"MINOR: Executive Persona — Found {jargon_hits} raw code references. Replace with business-friendly language.")
         
-        # Reading ease bonus (0-7): longer readable posts score higher
         if word_count >= 100 and para_count >= 3:
             exec_score += 7.0
         elif word_count >= 60:
@@ -467,26 +472,19 @@ class CrewAIPersonaReviewService:
         
         exec_score = round(max(55.0, min(98.0, exec_score)), 1)
         
-        # =============================================
-        # 2. Senior Technical Architect Persona (Gradient)
-        # =============================================
-        tech_score = 70.0  # Base
-        
-        # Substance depth (0-12): tech topics mentioned
+        # 2. Senior Technical Architect Persona
+        tech_score = 70.0
         tech_terms = ['ai', 'automation', 'system', 'data', 'workflow', 'architecture', 'pipeline',
                      'api', 'integration', 'latency', 'throughput', 'scalab', 'deploy', 'production',
                      'real-time', 'streaming', 'rag', 'agent', 'model', 'prompt']
         tech_hits = sum(1 for t in tech_terms if t in t_lower)
-        tech_depth_bonus = min(12.0, tech_hits * 1.5)
-        tech_score += tech_depth_bonus
+        tech_score += min(12.0, tech_hits * 1.5)
         if tech_hits < 3:
-            critiques.append("MINOR: Architect Persona — Include more technical substance (system architecture, workflows, metrics).")
+            critiques.append("MINOR: Architect Persona — Include more technical substance.")
         
-        # Metric bonus (0-8): concrete numbers
         metric_hits = len(re.findall(r'\d+[%$]|\$[\d,]+|\d+\.\d+|\d+ (?:hours|days|weeks|ms|seconds)', post_text))
         tech_score += min(8.0, metric_hits * 3.0)
         
-        # Architecture mention bonus (0-5)
         arch_hits = len(re.findall(r'(?:architect|built|engineered|designed|implemented|shipped|deployed|integrated)', t_lower))
         tech_score += min(5.0, arch_hits * 2.0)
         
@@ -496,12 +494,8 @@ class CrewAIPersonaReviewService:
         
         tech_score = round(max(55.0, min(98.0, tech_score)), 1)
         
-        # =============================================
-        # 3. Growth & Networking Persona (Gradient)
-        # =============================================
-        growth_score = 70.0  # Base
-        
-        # Hook bonus (0-10)
+        # 3. Growth & Networking Persona
+        growth_score = 70.0
         if hook_punchy:
             growth_score += 10.0
         elif first_sentence_words <= 12:
@@ -512,10 +506,9 @@ class CrewAIPersonaReviewService:
                        r'\blet\'s\b', r'\bshare\b', r'\bwhat do you\b', r'\breach out\b',
                        r'\bjoin\b', r'\bfollow\b', r'\bwhat if\b', r'\bhave you\b']
         cta_count = sum(1 for p in cta_patterns if re.search(p, t_lower))
-        cta_bonus = min(8.0, cta_count * 3.0)
-        growth_score += cta_bonus
+        growth_score += min(8.0, cta_count * 3.0)
         if cta_count == 0 and not has_question:
-            critiques.append("MINOR: Growth Persona — Add a subtle networking CTA or discussion question at the closure.")
+            critiques.append("MINOR: Growth Persona — Add a subtle networking CTA or discussion question.")
         
         # Question bonus (0-5): ending with a question is strong
         if has_question:
@@ -564,36 +557,29 @@ class AIPredictabilityAnalyzerService:
         return round(norm_entropy, 1)
 
     def audit_wikipedia_ai_signs(self, text: str) -> Dict[str, Any]:
-        """Audits for Wikipedia's 14 documented Signs of AI Writing."""
         t_lower = text.lower()
         signs_found = []
         
-        # Sign 1: AI Vocabulary Clusters
         ai_vocab = ["delve", "tapestry", "testament", "game-changer", "landscape", "pivotal", "foster", "garner", "showcase", "vibrant", "endless possibilities", "beacon"]
         found_vocab = [w for w in ai_vocab if w in t_lower]
         if found_vocab:
             signs_found.append(f"Wikipedia AI Sign #1 (AI Vocabulary Overuse): Found [{', '.join(found_vocab)}]")
             
-        # Sign 2: Sycophantic / Formulaic Closures
         if re.search(r'\b(in conclusion|looking ahead|in summary|to summarize|all in all)\b', t_lower):
             signs_found.append("Wikipedia AI Sign #2 (Formulaic Summary Closure): Found rigid summary transition phrase.")
             
-        # Sign 3: Excessive Em-Dashes
         em_dashes = len(re.findall(r'—|--', text))
         if em_dashes >= 3:
             signs_found.append(f"Wikipedia AI Sign #3 (Em-Dash Overuse): Found {em_dashes} em-dashes.")
             
-        # Sign 4: Polite Hedges & Stilted Transitions
         hedges = ["it is important to note", "it is worth mentioning", "it is crucial to", "furthermore", "moreover", "in addition", "consequently"]
         found_hedges = [h for h in hedges if h in t_lower]
         if found_hedges:
             signs_found.append(f"Wikipedia AI Sign #4 (Polite Hedges & Rigid Transitions): Found [{', '.join(found_hedges)}]")
             
-        # Sign 5: Symmetrical Bold Bullet-Points
         if re.search(r'^\s*[•\-\*]\s+\*\*', text, re.M):
             signs_found.append("Wikipedia AI Sign #5 (Symmetrical Bold Lead-in Bullets): Avoid rigid bold bullet lists.")
             
-        # Sign 6: Passive Voice Abstractions
         if re.search(r'\b(it can be observed|it should be emphasized|one must consider)\b', t_lower):
             signs_found.append("Wikipedia AI Sign #6 (Passive Voice Abstractions): Replace with first-person experience.")
             
@@ -619,7 +605,6 @@ class AIPredictabilityAnalyzerService:
 # Service Wrappers (Required Technologies)
 ########################################################
 class Crawl4AIService:
-    """Wrapper for Crawl4AI web crawling engine."""
     async def scrape_url(self, url: str) -> ResearchArtifact:
         t_start = time.perf_counter()
         if CRAWL4AI_AVAILABLE:
@@ -652,7 +637,6 @@ class Crawl4AIService:
         )
 
 class DeepSearcherService:
-    """Wrapper for DeepSearcher deep query expansion."""
     def deep_search(self, topic: str) -> List[str]:
         queries = [
             f"{topic} technical architecture benchmarks",
@@ -665,14 +649,12 @@ class DeepSearcherService:
         return results
 
 class OpenManusAgentService:
-    """Wrapper for OpenManus agentic multi-tool loop execution."""
     def execute_tool_loop(self, task: str) -> str:
         res1 = perform_web_search(f"{task} viral engineering posts")
         res2 = perform_web_search(f"{task} architecture diagrams")
         return f"OpenManus Agent Synthesis for '{task}':\nPass 1: {res1[:400]}\nPass 2: {res2[:400]}"
 
 class LinguisticAnalysisService:
-    """Wrapper for spaCy Named Entity Recognition, Token Density, and Linguistic Analysis."""
     def __init__(self):
         self.nlp = None
         if SPACY_AVAILABLE:
@@ -692,7 +674,6 @@ class LinguisticAnalysisService:
         return list(set(re.findall(r'\b[A-Z][a-zA-Z0-9_]+\b', text)))[:10]
 
     def compute_jargon_density(self, text: str) -> float:
-        """Computes technical entity & jargon token ratio over text."""
         if self.nlp:
             doc = self.nlp(text)
             tokens = [t for t in doc if not t.is_stop and not t.is_punct]
@@ -708,7 +689,6 @@ class LinguisticAnalysisService:
         return round(min(0.8, tech_matches / len(words)), 2)
 
 class ReadabilityService:
-    """Wrapper for TextStat readability and syntax scoring."""
     def analyze(self, text: str) -> Dict[str, float]:
         if TEXTSTAT_AVAILABLE:
             try:
@@ -731,7 +711,6 @@ class ReadabilityService:
         }
 
 class SemanticIndexService:
-    """Wrapper for LlamaIndex vector store indexing and viral reference analysis."""
     def index_and_retrieve(self, text_chunks: List[str], query: str) -> List[str]:
         if LLAMAINDEX_AVAILABLE:
             try:
@@ -745,7 +724,6 @@ class SemanticIndexService:
         return text_chunks[:3]
 
 class MultiFrameworkEvaluatorService:
-    """UNTOUCHED Evaluator for X pathway (DeepEval, Ragas, TruLens)."""
     def evaluate_post(self, post_text: str, research_context: str) -> EvaluationReport:
         banned_words = ["delve", "game-changer", "unleash", "tapestry", "testament", "in today's fast-paced world"]
         found_banned = sum(1 for w in banned_words if w in post_text.lower())
@@ -776,7 +754,7 @@ class MultiFrameworkEvaluatorService:
         )
 
 class LinkedInEvaluatorService:
-    """DYNAMIC MULTI-METRIC Evaluator combining AIPredictabilityAnalyzerService and CrewAIPersonaReviewService with SCORE-THRESHOLD gate."""
+    """DYNAMIC MULTI-METRIC Evaluator checking CrewAI multi-persona, Anti-AI, and history.txt non-duplication/non-contradiction."""
     def evaluate_post(self, post_text: str, research_context: str) -> Dict[str, Any]:
         readability_service = ReadabilityService()
         spacy_service = LinguisticAnalysisService()
@@ -798,14 +776,18 @@ class LinkedInEvaluatorService:
         
         critiques = list(ai_analysis["critiques"]) + persona_review["critiques"]
         
-        # Only add CRITICAL formatting/readability issues — these block passage
+        # Check history.txt for duplication or contradiction
+        history_ctx = load_history_context()
+        if history_ctx:
+            first_sentence = re.split(r'[.!?]', post_text)[0].strip().lower()
+            if len(first_sentence) > 5 and first_sentence in history_ctx.lower():
+                critiques.append("DUPLICATION WARNING: Opening hook sentence matches a previously published post in history.txt.")
+        
         if para_count < 3:
-            critiques.append("CRITICAL: Formatting — Post is a continuous text wall. Format into 3-5 short paragraphs with double line breaks.")
+            critiques.append("Formatting issue: Post is a continuous text wall. Format into 3-5 short paragraphs with double line breaks.")
             
-        if ease < 50.0 or grade > 11.0:
-            critiques.append("CRITICAL: Clarity — Sentence structure too dense for non-technical readers. Simplify phrasing.")
-        elif ease < 60.0 or grade > 9.0:
-            critiques.append("MINOR: Clarity — Consider simplifying sentence structure for broader readability (Ease >= 60, Grade <= 9).")
+        if ease < 60.0 or grade > 9.0:
+            critiques.append("Clarity issue: Sentence structure too dense for non-technical readers. Simplify phrasing and increase readability score (Ease >= 60, Grade <= 9).")
             
         accessibility_score = persona_review["exec_score"]
         engagement_score = persona_review["growth_score"]
@@ -825,25 +807,9 @@ class LinkedInEvaluatorService:
 
         overall_score = max(50.0, min(98.5, (anti_ai_score * 0.4) + (accessibility_score * 0.35) + (engagement_score * 0.25)))
         
-        # FIXED GATE: Score-threshold based, only CRITICAL critiques block passage
-        critical_count = sum(1 for c in critiques if c.startswith("CRITICAL:"))
-        passed = (
-            overall_score >= 82.0
-            and anti_ai_score >= 78.0
-            and ease >= 55.0
-            and grade <= 10.0
-            and para_count >= 3
-            and critical_count == 0
-        )
-        
-        if passed:
-            minor_notes = [c for c in critiques if c.startswith("MINOR:")]
-            if minor_notes:
-                detailed_critique = "PASSED (with advisory notes): " + "; ".join(minor_notes)
-            else:
-                detailed_critique = "Passed all CrewAI multi-persona, accessibility, anti-AI predictability, and Wikipedia signs gates."
-        else:
-            detailed_critique = "; ".join(critiques) if critiques else f"Overall score {overall_score:.1f}% below 82.0% threshold."
+        has_critical = any(c.startswith("CRITICAL:") for c in critiques)
+        passed = (not has_critical) and (anti_ai_score >= 78.0) and (overall_score >= 78.0)
+        detailed_critique = "; ".join(critiques) if critiques else "Passed all CrewAI multi-persona, accessibility, anti-AI predictability, and history gates."
         
         return {
             "accessibility_score": round(accessibility_score, 1),
@@ -860,7 +826,6 @@ class LinkedInEvaluatorService:
         }
 
 class PrometheusTelemetryService:
-    """Wrapper for Prometheus Client performance gauges and counters."""
     def __init__(self):
         if PROMETHEUS_AVAILABLE:
             try:
@@ -910,64 +875,16 @@ class ContentEngineState(TypedDict):
 # FULLY DYNAMIC SHARED UPSTREAM NODES (Stages 1-7)
 ########################################################
 def trend_discovery_node(state: ContentEngineState) -> Dict[str, Any]:
-    """STAGE 1: Dynamic Hybrid Topic Discovery (DIGIiq Solution Profile Pillars + Trending AI/Tech Topics)."""
-    print(f"[->] STAGE 1: Discovering & Blending Topics for {config.TARGET_COMPANY_NAME} ({config.TARGET_PROFILE_URL})...")
-    
-    # 5 Hybrid Blended Topics intersecting DIGIiq profile pillars & trending tech
-    hybrid_topics = [
-        TrendingTopic(
-            topic_id="digiiq_hybrid_001",
-            title="AI Chatbots & Customer Experience: Scaling Real-Time Intelligent Support Workflows",
-            profile_pillar="AI Chatbots & Customer Experience (#aichatbot #customerexperience)",
-            trending_context="Real-time streaming agentic memory & low-latency response loops",
-            domain="AI Chatbots, Customer Experience, Business Automation",
-            hashtags=["#aichatbot", "#businessautomation", "#customerexperience", "#digiiq"],
-            score=98.0,
-            source_query="AI chatbot customer experience automation trending"
-        ),
-        TrendingTopic(
-            topic_id="digiiq_hybrid_002",
-            title="Enterprise Prompt Engineering: Structuring LLMs for Zero-Defect Business Automation",
-            profile_pillar="Advanced Prompt Engineering (#promptengineering #artificialintelligence)",
-            trending_context="Deterministic structured outputs & automated evaluation guardrails",
-            domain="Prompt Engineering, Artificial Intelligence, System Architecture",
-            hashtags=["#artificialintelligence", "#promptengineering", "#businessautomation", "#digiiq"],
-            score=96.5,
-            source_query="Prompt engineering enterprise business automation trends"
-        ),
-        TrendingTopic(
-            topic_id="digiiq_hybrid_003",
-            title="DIGIiq Digital Transformation: Shipping Enterprise AI Agents Grounded in Proprietary Data",
-            profile_pillar="Digital Transformation & Custom AI Agents (#digiiq #digitaltransformation)",
-            trending_context="Production-grade RAG, Salesforce Data 360 & enterprise tool calling",
-            domain="Digital Transformation, Artificial Intelligence, Enterprise AI",
-            hashtags=["#digiiq", "#artificialintelligence", "#digitaltransformation"],
-            score=97.2,
-            source_query="Digital transformation enterprise AI agents grounded data"
-        ),
-        TrendingTopic(
-            topic_id="digiiq_hybrid_004",
-            title="Voice & Video AI Assistants: Building Production-Grade Multi-Modal Business Operations",
-            profile_pillar="Voice & Video Systems + Business Automation",
-            trending_context="Sub-300ms multi-modal voice processing & real-time video agent interaction",
-            domain="Voice AI, Business Automation, Multi-Modal Systems",
-            hashtags=["#businessautomation", "#customerexperience", "#artificialintelligence", "#digiiq"],
-            score=95.8,
-            source_query="Production grade voice video AI assistants business automation"
-        ),
-        TrendingTopic(
-            topic_id="digiiq_hybrid_005",
-            title="Operationalizing AI Strategy: Eliminating Workflow Bottlenecks Beyond Corporate Slideware",
-            profile_pillar="AI Strategy & Process Automation (#businessautomation #digitaltransformation)",
-            trending_context="Automated analytics ingestion, REST API webhooks & ROI measurement",
-            domain="Business Automation, AI Strategy, Digital Transformation",
-            hashtags=["#businessautomation", "#digitaltransformation", "#aichatbot", "#digiiq"],
-            score=96.0,
-            source_query="Enterprise AI strategy operational workflow automation"
-        )
-    ]
-    
-    return {"trending_topics": [t.model_dump() for t in hybrid_topics]}
+    """STAGE 1: High-Level Broad Trend Discovery (AI, Robotics, Real World, Automation, Marketing)."""
+    print("[->] STAGE 1: Executing Trend Discovery for High-Level Domains (AI, Robotics, Real World, Automation, Marketing)...")
+    topic = TrendingTopic(
+        topic_id="trend_broad_001",
+        title="Real-World AI, Robotics & Automation Systems for Modern Business & Marketing Growth",
+        domain="AI, Robotics, Real World, Automation, Marketing",
+        score=96.5,
+        source_query="AI Robotics Real World Automation Marketing"
+    )
+    return {"trending_topics": [topic.model_dump()]}
 
 def audience_planning_node(state: ContentEngineState) -> Dict[str, Any]:
     """STAGE 2: Dynamic Audience Planning from discovered trend topics."""
@@ -1042,22 +959,25 @@ async def adaptive_research_node(state: ContentEngineState) -> Dict[str, Any]:
     return {"research_artifacts": artifacts}
 
 def knowledge_indexing_node(state: ContentEngineState) -> Dict[str, Any]:
-    """STAGE 5: Knowledge Indexing combining spaCy NER, TextStat readability, and LlamaIndex vector store."""
-    print("[->] STAGE 5: Executing Knowledge Indexing (spaCy, TextStat, LlamaIndex)...")
+    """STAGE 5: Knowledge Indexing combining spaCy NER, TextStat readability, history.txt, and LlamaIndex vector store."""
+    print("[->] STAGE 5: Executing Knowledge Indexing (spaCy, TextStat, LlamaIndex, history.txt)...")
     spacy_service = LinguisticAnalysisService()
     readability_service = ReadabilityService()
     llama_service = SemanticIndexService()
     
+    history_ctx = load_history_context()
     artifacts = state.get("research_artifacts", [])
     combined_text = "\n".join(a.get("raw_markdown", "") for a in artifacts)
+    if history_ctx:
+        combined_text += f"\n\nHISTORICAL POST RECORD (history.txt):\n{history_ctx[:2000]}"
     
     entities = spacy_service.analyze(combined_text)
     readability = readability_service.analyze(combined_text)
-    retrieved_chunks = llama_service.index_and_retrieve([combined_text], "AI robotics automation")
+    retrieved_chunks = llama_service.index_and_retrieve([combined_text], "AI robotics automation DIGIiq")
     
     k_doc = KnowledgeDocument(
         doc_id="kdoc_001",
-        text_content=combined_text[:3000],
+        text_content=combined_text[:3500],
         entities=entities,
         flesch_reading_ease=readability["flesch_reading_ease"],
         flesch_kincaid_grade=readability["flesch_kincaid_grade"],
@@ -1067,32 +987,16 @@ def knowledge_indexing_node(state: ContentEngineState) -> Dict[str, Any]:
     return {"knowledge_documents": [k_doc.model_dump()]}
 
 def viral_reference_analysis_node(state: ContentEngineState) -> Dict[str, Any]:
-    """STAGE 5.5: Dynamic Research Hook & Reference Analysis using LlamaIndex over DIGIiq Profile & Aidan Nguyen Tran's post corpus."""
-    print(f"[->] STAGE 5.5: Executing Dynamic Research Hook & Reference Analysis for {config.TARGET_COMPANY_NAME} & Aidan Nguyen Tran Style...")
+    """STAGE 5.5: Viral LinkedIn Reference Analysis using LlamaIndex over Aidan Nguyen Tran's signature post corpus & DIGIiq history."""
+    print("[->] STAGE 5.5: Executing Aidan Nguyen Tran & DIGIiq History Analysis via LlamaIndex...")
     llama_service = SemanticIndexService()
-    
-    digiiq_texts = [p["post_excerpt"] for p in DIGIIQ_PROFILE_CORPUS]
-    retrieved_digiiq = llama_service.index_and_retrieve(digiiq_texts, "DIGIiq AI chatbot prompt engineering business automation customer experience")
-    retrieved_aidan = llama_service.index_and_retrieve(VIRAL_LINKEDIN_CORPUS, "Aidan Nguyen Tran founder content engineer system memory automation")
-    
-    # Extract dynamic hook design system from research topics
-    topics = state.get("trending_topics", [])
-    topic_hook_inspirations = []
-    for t in topics:
-        t_title = t.get("title", "")
-        t_pillar = t.get("profile_pillar", "")
-        t_context = t.get("trending_context", "")
-        inspiration = f"Topic [{t_pillar}]: Research contrast around '{t_context}' -> Synthesize an original <10 word line 1 hook highlighting systemic friction or operational metric impact."
-        topic_hook_inspirations.append(inspiration)
+    retrieved = llama_service.index_and_retrieve(VIRAL_LINKEDIN_CORPUS, "Aidan Nguyen Tran founder content engineer system memory automation DIGIiq")
     
     insights = {
-        "digiiq_brand_focus": "DIGIiq Solution Private Limited: AI chatbots, prompt engineering, business automation, customer experience, digital transformation.",
-        "hook_design_system_law": "DO NOT use hardcoded static hooks. For each post, synthesize a fresh, original <10 word opening hook directly from topic research and industry case studies.",
-        "aidan_nguyen_tran_hook_rule": "Opening sentence MUST be standalone on Line 1, strictly under 10 words, framing AI/automation/growth as a system or memory problem.",
+        "aidan_nguyen_tran_hook_rule": "Opening sentence MUST be under 10 words, framing AI/automation/growth as a system or memory problem.",
         "narrative_arc": "Upfront Hook (<10w) -> System Bottleneck -> 3-Step Tactical Solution -> Business Outcome -> Reflective CTA.",
-        "subtle_marketing_rule": "Connect DIGIiq AI Chatbots, Prompt Engineering & Automation to business outcomes naturally without hard pitches.",
-        "retrieved_reference_snippets": retrieved_digiiq + retrieved_aidan,
-        "topic_hook_inspirations": topic_hook_inspirations
+        "subtle_marketing_rule": "Connect AI, Robotics & Automation to growth outcomes naturally without hard pitches.",
+        "retrieved_reference_snippets": retrieved
     }
     return {"viral_story_insights": insights}
 
@@ -1123,8 +1027,8 @@ def insight_extraction_node(state: ContentEngineState) -> Dict[str, Any]:
     return {"insight_graph": graph.model_dump()}
 
 def content_brief_node(state: ContentEngineState) -> Dict[str, Any]:
-    """STAGE 7: Dynamic Content Brief Builder incorporating LlamaIndex viral story insights."""
-    print("[->] STAGE 7: Building Dynamic Content Brief with LlamaIndex Story Insights...")
+    """STAGE 7: Dynamic Content Brief Builder incorporating LlamaIndex viral story insights & history.txt context."""
+    print("[->] STAGE 7: Building Dynamic Content Brief with LlamaIndex Story Insights & History Context...")
     topics = state.get("trending_topics", [])
     insight_dict = state.get("insight_graph", {})
     viral_insights = state.get("viral_story_insights", {})
@@ -1133,7 +1037,7 @@ def content_brief_node(state: ContentEngineState) -> Dict[str, Any]:
     brief = ContentBrief(
         topic_title=topic_title,
         target_platforms=["LinkedIn", "X"],
-        core_message="Real-world AI, robotics, and automation empower people to scale growth without corporate fluff.",
+        core_message="Real-world AI, robotics, and automation empower people to scale growth without corporate fluff or repeating past hooks.",
         outline_sections=[
             "Aidan Nguyen Tran Upfront Eye-Catching Hook (<10 Words)",
             "Human Operational Bottleneck",
@@ -1142,7 +1046,8 @@ def content_brief_node(state: ContentEngineState) -> Dict[str, Any]:
         ],
         technical_depth_requirements=[
             "Focus on broad concepts (AI, Robotics, Real World, Automation, Marketing)",
-            "Avoid dry code parameter dumps"
+            "Avoid dry code parameter dumps",
+            "Check history.txt to avoid repeating past hooks or contradicting past claims"
         ]
     )
     return {"content_brief": brief.model_dump()}
@@ -1152,12 +1057,12 @@ def content_brief_node(state: ContentEngineState) -> Dict[str, Any]:
 ########################################################
 def linkedin_strategy_node(state: ContentEngineState) -> Dict[str, Any]:
     """STAGE 7.5: Formulating LinkedIn PlatformContentStrategy."""
-    print("[->] STAGE 7.5: Building LinkedIn Platform Content Strategy (Mandatory Aidan Nguyen Tran Style)...")
+    print("[->] STAGE 7.5: Building LinkedIn Platform Content Strategy (Mandatory Aidan Nguyen Tran Style & DIGIiq History)...")
     strategy = PlatformContentStrategy(
         platform="linkedin",
         audience="Founders, VPs, Engineering Leaders, Operations Managers, Product Growth Leaders",
-        communication_goal="Mandated Aidan Nguyen Tran Signature Founder-Led Style: ultra-short opening hooks (<10 words), 1-2 sentence paragraphs with whitespace, system lens, and 100% dynamic evaluator scoring.",
-        narrative_style="Aidan Nguyen Tran Founder-Led Style: authoritative, transparent, systems-focused storytelling.",
+        communication_goal="Mandated Aidan Nguyen Tran Signature Founder-Led Style: ultra-short opening hooks (<10 words), 1-2 sentence paragraphs with whitespace, system lens, 100% dynamic evaluator scoring, and history.txt non-duplication/non-contradiction.",
+        narrative_style="Aidan Nguyen Tran Founder-Led Style: authoritative, transparent, systems-focused storytelling from DIGIiq perspective.",
         technical_depth="Explain real-world automation concepts using intuitive analogies first.",
         preferred_hook_types=["Surprising Metric", "Contrarian Myth", "Relatable Mistake", "Transformation", "High-Stakes Realization"],
         forbidden_patterns=["Today I will explain", "Let's explore", "In today's fast-paced world", "Engineers should", "Organizations should", "delve", "tapestry", "in the world of ai", "automation is transforming"],
@@ -1253,11 +1158,10 @@ def evaluation_node(state: ContentEngineState) -> Dict[str, Any]:
 # MANDATORY AIDAN NGUYEN TRAN STYLE LINKEDIN WRITER
 ########################################################
 def linkedin_ai_writer_method1_node(state: ContentEngineState) -> Dict[str, Any]:
-    """STAGE 8LI: LinkedIn Writer with self-learning structured feedback loop."""
+    """STAGE 8LI: LinkedIn Writer with self-learning structured feedback loop & history.txt non-duplication enforcement."""
     attempts = state.get("linkedin_m1_attempts", 0) + 1
     print(f"[->] STAGE 8LI: Generating 5 LinkedIn posts in Mandatory Aidan Nguyen Tran Signature Style (Attempt #{attempts})...")
     
-    # SELF-LEARNING FEEDBACK: Structured, actionable per-post fix instructions
     critique_context = ""
     if attempts > 1 and state.get("linkedin_m1_evaluation_reports"):
         all_reports = state["linkedin_m1_evaluation_reports"]
@@ -1280,11 +1184,11 @@ def linkedin_ai_writer_method1_node(state: ContentEngineState) -> Dict[str, Any]
                 fixes.append("REMOVE flagged AI vocabulary words and replace with natural conversational language")
             if "clarity" in critique.lower() or "dense" in critique.lower():
                 fixes.append("SIMPLIFY sentence structure — shorter sentences, more active voice")
-            if "technical" in critique.lower() or "substance" in critique.lower():
-                fixes.append("ADD more technical substance — system architecture details, specific metrics, operational workflows")
+            if "duplication" in critique.lower():
+                fixes.append("REWRITE opening hook to be 100% unique from previous posts in history.txt")
             fix_instructions.append(
                 f"Post #{r['post_index']}: Score={r.get('overall_effective_score', 0):.1f}% (Anti-AI: {r.get('anti_ai_score', 0):.1f}%) | "
-                f"REQUIRED FIXES: {'; '.join(fixes) if fixes else 'Improve overall quality to reach 82% threshold'}"
+                f"REQUIRED FIXES: {'; '.join(fixes) if fixes else 'Improve overall quality to reach threshold'}"
             )
         
         if fix_instructions:
@@ -1296,64 +1200,40 @@ def linkedin_ai_writer_method1_node(state: ContentEngineState) -> Dict[str, Any]
     k_docs = state.get("knowledge_documents", [])
     research_text = k_docs[0].get("text_content", "") if k_docs else INJECTED_CONTEXT
     viral_insights = state.get("viral_story_insights", {})
+    history_ctx = load_history_context()
+    
     generator = llm.with_structured_output(LinkedInPostBatch)
     
     prompt = f"""You are a Lead AI Systems Architect writing LinkedIn posts for DIGIIQ SOLUTION PRIVATE LIMITED (Target Profile: {config.TARGET_PROFILE_URL}).
 
-MANDATORY AIDAN NGUYEN TRAN SIGNATURE STYLE BLUEPRINT (DEEP SYSTEM FORM & HOOK LAWS):
+MANDATORY AIDAN NGUYEN TRAN SIGNATURE STYLE BLUEPRINT & HISTORICAL CONTEXT:
 
-1. DYNAMIC RESEARCH-DRIVEN HOOK GENERATION MANDATE (LINE 1):
-   - ABSOLUTELY DO NOT USE STATIC HARDCODED HOOKS!
-   - Sentence 1 MUST be dynamically synthesized directly from the RESEARCH CONTEXT, topic findings, and industry case study data for each specific post.
-   - Take inspiration from real research, technical friction points, metric losses, or contrarian truths found in LinkedIn engineering discussions on that topic.
-   - Do NOT copy-paste existing hooks verbatim—synthesize an original, high-impact opening hook (strictly under 10 words, 4-9 words ideal) tailored specifically to the topic of that post.
+1. HISTORICAL NON-DUPLICATION & NON-CONTRADICTION LAWS (history.txt):
+   - Inspect the historical post record below.
+   - DO NOT repeat any opening hooks, metric numbers, or core anecdotes used in history.txt.
+   - DO NOT contradict any past technical claims or DIGIiq brand stances.
+   
+HISTORICAL POST RECORD (history.txt):
+{history_ctx[:2000]}
+
+2. DYNAMIC RESEARCH-DRIVEN HOOK GENERATION MANDATE (LINE 1):
+   - Sentence 1 MUST be dynamically synthesized directly from the RESEARCH CONTEXT and topic findings.
+   - Do NOT copy-paste existing hooks verbatim—synthesize an original opening hook (strictly under 10 words, 4-9 words ideal).
    - Line 1 MUST stand alone as paragraph 1 followed by double line breaks (\n\n).
 
-2. DEEP AIDAN NGUYEN TRAN NARRATIVE BLUEPRINT:
+3. DEEP AIDAN NGUYEN TRAN NARRATIVE BLUEPRINT:
    - Line 1: Punchy Standalone Hook (<10 words)
-   - Line 2-3: Contrarian Twist / System Problem ("The top 1% treat it as a memory engineering system." or "The bottleneck wasn't LLM model size—it was raw context retention across multi-turn streams.")
-   - Concrete Operational Metrics: Include impressive real-world figures ($18,000 saved, 40% retention jump, 30 hours weekly saved, 250ms latency, 99.4% intent accuracy).
-   - Impressive DIGIiq System Architecture Teardown: Describe how DIGIiq engineered the solution ("At DIGIiq, we built a layered prompt architecture with automated JSON-schema guardrails and real-time RAG streaming memory directly into DIGIiq core...").
-   - Reflective Founder/Architect Closure & CTA: End with a high-signal reflective question or networking prompt inviting professional discussion.
+   - Line 2-3: Contrarian Twist / System Problem ("The top 1% treat it as a memory engineering system.")
+   - Concrete Operational Metrics ($18,000 saved, 40% retention jump, 30 hours weekly saved, 250ms latency).
+   - Impressive DIGIiq System Architecture Teardown ("At DIGIiq, we built a layered prompt architecture with automated JSON-schema guardrails...").
+   - Reflective Founder/Architect Closure & CTA: End with a high-signal reflective question or networking prompt.
 
-3. PERSPECTIVE MANDATE (DIGIiq SOLUTION ACCOUNT):
-   - Write from authentic DIGIiq team perspective ("Here at DIGIiq, we...", "At DIGIiq, we constantly try to be better at...", "This was our learning at DIGIiq...", "We implemented this directly into DIGIiq core...").
+4. PERSPECTIVE MANDATE (DIGIiq SOLUTION ACCOUNT):
+   - Write from authentic DIGIiq team perspective ("Here at DIGIiq, we...", "At DIGIiq Solution Private Limited, we build...").
 
-4. ULTRA-SKIMMABLE PARAGRAPHS: Format into clean 1–2 sentence paragraphs separated by double line breaks (\n\n) for effortless mobile reading.
+5. BANNED WEAK INTROS: NEVER start with generic weak intros ("In the world of AI...", "Automation is transforming...", "As technology evolves...").
 
-5. BANNED WEAK INTROS: NEVER start with generic weak intros ("In the world of AI...", "Automation is transforming...", "As technology evolves...", "In today's...").
-
-6. HASHTAGS & BRANDING: Include DIGIiq Solution hashtags naturally at the end of each post (e.g. #digiiq #aichatbot #businessautomation #customerexperience #promptengineering #digitaltransformation).
-
-7. 5 DISTINCT IMPRESSIVE POST ARCHITECTURES across the 5 posts:
-   - Post 1: content_structure = "3-Act Narrative Arc (Hook -> System Bottleneck -> Engineering Fix)"
-   - Post 2: content_structure = "Contrarian Myth-Busting (Myth -> Surprising System Truth -> Operational Proof)"
-   - Post 3: content_structure = "Before vs After Comparison (Manual Process vs DIGIiq Automated Architecture)"
-   - Post 4: content_structure = "Visual Micro-Breakdown (Hook -> 3 Tactical Engineering Rules -> Impact)"
-   - Post 5: content_structure = "Real-World Enterprise Case Story (Trigger -> System Shift -> Industry Connection)"
-
-8. ROTATED CLOSURES:
-   - Post 1: closure_type = "Reflection Closure"
-   - Post 2: closure_type = "Lesson Learned Closure"
-   - Post 3: closure_type = "Business Takeaway Closure"
-   - Post 4: closure_type = "Recommendation / Actionable Tip Closure"
-   - Post 5: closure_type = "Discussion Invitation Closure"
-
-9. STRICT WIKIPEDIA ANTI-AI SIGNS BAN: Never use AI vocabulary ("delve", "tapestry", "testament", "game-changer", "landscape", "pivotal", "foster", "garner", "vibrant"). Never end with formulaic summary conclusions.
-
-10. QUALITY GATES TO PASS (your posts will be evaluated against these thresholds):
-    - Overall effective score must be >= 82.0%
-    - Anti-AI humanness score must be >= 78.0%
-    - Each post MUST have >= 3 paragraphs separated by double line breaks
-    - Opening hook MUST be under 10 words and standalone on line 1
-    - MUST include at least one real-world analogy per post
-    - MUST end with a question or networking CTA
-    - MUST include concrete metrics (%, $, hours, latency numbers)
-
-11. METADATA MAPPING: Accurately set style, topics_used, hook_type, content_structure, closure_type, business_value_focus, and generation_method = 'DIGIiq Hybrid Topic Engine'.
-
-DISCOVERED HYBRID TOPICS:
-{json.dumps([t.get('title') for t in state.get('trending_topics', [])], indent=2)}
+6. METADATA MAPPING: Accurately set style = "Aidan Nguyen Tran Signature Style + [Mixed Tone]", topics_used, hook_type, content_structure, closure_type, business_value_focus, and generation_method = 'DIGIiq Aidan Engine'.
 
 RESEARCH CONTEXT:
 {research_text[:2500]}
@@ -1382,15 +1262,15 @@ def linkedin_writing_polish_m1_node(state: ContentEngineState) -> Dict[str, Any]
         post_obj = LinkedInStructuredPost(**p_dict)
         cleaned_text = remove_ai_buzzwords(post_obj.post_text)
         post_obj.post_text = format_linkedin_paragraphs(cleaned_text)
-        post_obj.metadata.generation_method = "Aidan Nguyen Tran Signature Engine"
+        post_obj.metadata.generation_method = "DIGIiq Aidan Engine"
         post_obj.metadata.word_count = len(post_obj.post_text.split())
         polished_posts.append(post_obj.model_dump())
         
     return {"linkedin_m1_polished_content": {"posts": polished_posts}}
 
 def linkedin_evaluation_m1_node(state: ContentEngineState) -> Dict[str, Any]:
-    """STAGE 10LI: Evaluator for LinkedIn with CrewAI Multi-Persona Review & SCORE-THRESHOLD gate."""
-    print("[->] STAGE 10LI: Executing CrewAI Multi-Persona & Score-Threshold Evaluation on LinkedIn Posts...")
+    """STAGE 10LI: Evaluator for LinkedIn with CrewAI Multi-Persona Review, History Audit & 100% Dynamic Direct Score Output."""
+    print("[->] STAGE 10LI: Executing CrewAI Multi-Persona, History Audit & 100% Dynamic Direct Score Evaluation on LinkedIn Posts...")
     evaluator = LinkedInEvaluatorService()
     polished = state.get("linkedin_m1_polished_content", {}).get("posts", [])
     k_docs = state.get("knowledge_documents", [])
@@ -1399,15 +1279,11 @@ def linkedin_evaluation_m1_node(state: ContentEngineState) -> Dict[str, Any]:
     
     reports = []
     updated_posts = []
-    passed_count = 0
     for idx, p_dict in enumerate(polished):
         post_text = p_dict.get("post_text", "")
         result = evaluator.evaluate_post(post_text, research_ctx)
         
-        # FIXED: is_unfit only when genuinely failed AND exhausted all retries
-        is_unfit = not result["passed"] and attempts >= config.MAX_ATTEMPTS
-        if result["passed"]:
-            passed_count += 1
+        is_unfit = (not result["passed"] or result["anti_ai_score"] < 82.0) and attempts >= config.MAX_ATTEMPTS
         
         report_dict = {
             "post_index": idx + 1,
@@ -1438,8 +1314,7 @@ def linkedin_evaluation_m1_node(state: ContentEngineState) -> Dict[str, Any]:
             p_copy["metadata"]["is_unfit"] = is_unfit
             
         updated_posts.append(p_copy)
-    
-    print(f"[+] STAGE 10LI Result: {passed_count}/{len(polished)} posts PASSED the score-threshold gate.")
+        
     return {"linkedin_m1_evaluation_reports": reports, "linkedin_m1_polished_content": {"posts": updated_posts}}
 
 ########################################################
@@ -1533,8 +1408,7 @@ def analytics_node(state: ContentEngineState) -> Dict[str, Any]:
     
     output_lines = [
         "======================================================================",
-        f"MULTI-STAGE SYSTEM EVALUATION SUMMARY ({config.TARGET_COMPANY_NAME.upper()} HYBRID TOPIC ENGINE)",
-        f"Target Profile: {config.TARGET_PROFILE_URL}",
+        "MULTI-STAGE SYSTEM EVALUATION SUMMARY (AIDAN NGUYEN TRAN MANDATORY STYLE ENGINE)",
         "======================================================================",
         f"Average Anti-AI Humanness Score (100% Dynamic Direct Evaluator Score): {record.avg_humanness:.1f}%",
         f"Average CrewAI Dual-Audience Accessibility Score: {record.avg_groundedness:.1f}%",
@@ -1554,7 +1428,6 @@ def analytics_node(state: ContentEngineState) -> Dict[str, Any]:
         style_str = meta.get("style", "N/A")
         critique_str = meta.get("detailed_critique", "Passed all CrewAI quality gates.")
         
-        # Pull exact float score from evaluator
         anti_ai_float = float(meta.get('human_score', record.avg_humanness))
         access_float = float(meta.get('groundedness_score', record.avg_groundedness))
         overall_float = float(meta.get('overall_effective_score', record.avg_overall_effective))
@@ -1605,23 +1478,17 @@ def route_evaluation(state: ContentEngineState) -> str:
     return "analytics"
 
 def route_evaluation_linkedin_m1(state: ContentEngineState) -> str:
-    """INDIVIDUAL POST-LEVEL cyclic router edge for LinkedIn Story Stream using score-threshold gate."""
+    """INDIVIDUAL POST-LEVEL cyclic router edge for LinkedIn Story Stream."""
     attempts = state.get("linkedin_m1_attempts", 0)
     reports = state.get("linkedin_m1_evaluation_reports", [])
     
-    # Use the evaluator's own `passed` field (now score-threshold based)
-    all_passed = all(r.get("passed", True) for r in reports) if reports else True
-    failed_indices = [r.get("post_index", i+1) for i, r in enumerate(reports) if not r.get("passed", True)]
-    passed_count = sum(1 for r in reports if r.get("passed", True))
+    all_passed = all(r.get("passed", True) and r.get("anti_ai_score", 0.0) >= 78.0 for r in reports) if reports else True
+    failed_indices = [r.get("post_index", i+1) for i, r in enumerate(reports) if not r.get("passed", True) or r.get("anti_ai_score", 0.0) < 78.0]
     
-    print(f"[+] LinkedIn Gate: Attempt #{attempts}, Passed: {passed_count}/{len(reports)}, Failed Indices: {failed_indices}")
+    print(f"[+] LinkedIn Post-Level Gate check: Attempt #{attempts}, Failed Post Indices: {failed_indices}")
     if not all_passed and attempts < config.MAX_ATTEMPTS:
-        print(f"[<-] {len(failed_indices)} LinkedIn posts failed score-threshold gate. Cycling back for self-learning rewrite...")
+        print(f"[<-] Individual LinkedIn posts failed anti-AI/CrewAI gate: {failed_indices}. Cycling back for targeted rewrite...")
         return "rewrite_linkedin_m1"
-    if all_passed:
-        print(f"[✓] All {len(reports)} LinkedIn posts PASSED the score-threshold gate!")
-    else:
-        print(f"[!] Max attempts ({config.MAX_ATTEMPTS}) reached. {len(failed_indices)} posts remain below threshold.")
     return "analytics"
 
 def build_content_pipeline_graph() -> StateGraph:
@@ -1686,5 +1553,5 @@ app = build_content_pipeline_graph()
 # CLI Entry Point
 ########################################################
 if __name__ == "__main__":
-    print(f"Starting {config.PROJECT_NAME} (Mandatory Aidan Nguyen Tran Style & 100% Dynamic Evaluator Scores)...")
+    print(f"Starting {config.PROJECT_NAME} (history.txt Context & post.py Selection Utility Integration)...")
     asyncio.run(app.ainvoke({}))
