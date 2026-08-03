@@ -1,67 +1,134 @@
-# Pragmatic Multi-Stage AI Content Engineering Platform (history.txt & post.py Selection Engine)
+# Pragmatic Multi-Stage AI Content Engineering Platform (SQLite & n8n Engine)
 
-An autonomous, self-correcting multi-agent content generation platform built inside `main.py`, engineered for **DIGIiq Solution Private Limited** ([LinkedIn Profile](https://www.linkedin.com/company/digiiq-solution-private-limited/posts/?feedView=all)).
+An autonomous, self-correcting multi-agent content generation platform built inside [`main.py`](file:///c:/Users/aryan/OneDrive/Desktop/DIGIiq/WORK/social%20media%20Posts%20Automations/main.py), engineered for **DIGIiq Solution Private Limited** ([LinkedIn Profile](https://www.linkedin.com/company/digiiq-solution-private-limited/posts/?feedView=all)) and Personal X Account Content.
 
-The platform features an 11-stage stateful workflow powered by **LangGraph**, **LangChain**, **Google Gemini**, **LlamaIndex**, **Crawl4AI**, **spaCy**, **TextStat**, **CrewAI**, **DeepEval**, **RAGAS**, **TruLens**, and **Prometheus Telemetry**.
-
----
-
-## 1. Overview
-
-The platform features **decoupled, specialized generation and evaluation pipelines for LinkedIn and X (Twitter)**:
-
-- **X Pathway**: 100% untouched production-ready pipeline generating 5 punchy, high-signal, code-and-parameter-dense technical threads.
-- **LinkedIn Stream (Mandatory Aidan Nguyen Tran Signature Style Engine & history.txt Context)**: 5 authentic, founder-led story posts mandating Aidan Nguyen Tran's signature writing style (`https://www.linkedin.com/in/aidan-nguyen-tran-277a3a258/`) with **history.txt non-duplication enforcement** and **100% dynamic direct evaluator score outputs**.
+The platform features an 11-stage stateful workflow powered by **LangGraph**, **LangChain**, **Google Gemini**, **SQLite Permanent Logger**, **LlamaIndex Vector Engine**, **Crawl4AI**, **spaCy**, **TextStat**, **CrewAI Multi-Persona Review**, **DeepEval**, **RAGAS**, **TruLens**, **n8n Webhook Integration**, and **Prometheus Telemetry**.
 
 ---
 
-## 2. Historical Post Repository (`history.txt`)
+## 1. System Architecture & Execution Flow
 
-`history.txt` acts as the persistent memory store for all published or selected posts:
-
-- **Preserves DIGIiq Brand Perspective**: Pre-populated with DIGIiq Solution Private Limited's actual historical post corpus.
-- **Non-Duplication & Non-Contradiction**: `main.py` reads `history.txt` to guarantee that generated posts on one day never repeat opening hooks, metric claims, or core anecdotes, and never contradict previous brand stances.
-- **Manual Copy-Pasting**: You can paste text of current/past posts directly into `history.txt` at any time.
-
----
-
-## 3. Post Selection Utility Script (`post.py`)
-
-[`post.py`](file:///c:/Users/aryan/OneDrive/Desktop/DIGIiq/WORK/social%20media%20Posts%20Automations/post.py) is a standalone selection tool to manage post history:
-
-### Interactive Usage:
-
-```bash
-python post.py
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│               STAGE 0: Interactive CLI Prompt Setup                     │
+│  - Input 1: Research Topics/Domains                                    │
+│  - Input 2: Content Writing Styles Selection Menu (Story, Tech, Fun)   │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                   SHARED UPSTREAM RESEARCH PIPELINE                    │
+│  Stage 1: Trend Discovery  ──>  Stage 2: Audience Planning             │
+│  Stage 3: Research Plan    ──>  Stage 4: Adaptive Deep Research        │
+│  Stage 5: Knowledge Index  ──>  Stage 5.5: Viral Reference Analysis    │
+│  Stage 6: Insight Extraction ─> Stage 7: Dynamic Content Brief         │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                  ┌─────────────────┴─────────────────┐
+                  ▼                                   ▼
+┌───────────────────────────────────┐   ┌───────────────────────────────────┐
+│     PERSONAL CODING X STREAM      │   │     LINKEDIN STORYTELLING STREAM  │
+│  Stage 8X: Coding Writer (<270c)  │   │  Stage 8LI: Aidan Nguyen Writer   │
+│  Stage 9X: Buzzword & Length Trim │   │  Stage 9LI: Whitespace Polish     │
+│  Stage 10X: Multi-Eval & Ranking  │   │  Stage 10LI: CrewAI & Anti-AI Eval│
+└─────────────────┬─────────────────┘   └─────────────────┬─────────────────┘
+                  │                                       │
+                  └─────────────────┬─────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│            STAGE 11: Output Directory & Report Generation              │
+│  - Saves clean X post text to:       output/x_post.txt                 │
+│  - Saves X metadata sidecar to:      output/x_post_metadata.json       │
+│  - Saves full 6-post report to:      output/posts_YYYYMMDD_HHMMSS.txt  │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│         MANUAL DISPATCH & SQLITE PERMANENT LOGGER (send_to_n8n.py)     │
+│  - Dispatches payload to n8n Webhook (N8N_API_KEY)                    │
+│  - Inserts permanent row into SQLite database:  dispatched_posts.db   │
+│  - Automatically appends dispatched post to:    history.txt            │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-Displays all generated posts from the latest timestamped output file (`posts_YYYYMMDD_HHMMSS.txt`) and prompts you to select which post numbers (e.g. `1, 3, 7` out of 10) were chosen for posting. Selected posts are automatically formatted and appended to `history.txt`.
+---
 
-### CLI Command Usage:
+## 2. Key Features & SQLite Database Lifecycle
 
-```bash
-python post.py --file posts_20260801_001907.txt --select 1,3,7
-python post.py --latest --select 2
+### A. Temporary vs. Permanent State Lifecycle
+1. **Temporary State (`main.py`)**: Posts generated by `main.py` are saved in temporary files (`output/x_post.txt`, `output/x_post_metadata.json`, and `output/posts_*.txt`).
+2. **Permanent State (`send_to_n8n.py`)**: ONLY when you run `python send_to_n8n.py` and the post is successfully delivered to your n8n workflow (HTTP 200), the post transitions to **permanent state**:
+   - Inserts a full metadata record into the **lightweight SQLite database (`dispatched_posts.db`)**.
+   - Appends the dispatched post content to `history.txt`.
+
+---
+
+## 3. SQLite Database Schema (`dispatched_posts.db`)
+
+Table Name: **`dispatched_x_posts`**
+
+| Column Name | SQL Type | Description |
+| :--- | :--- | :--- |
+| `id` | `INTEGER PRIMARY KEY AUTOINCREMENT` | Unique post dispatch ID |
+| `dispatched_at` | `TEXT` | UTC ISO-8601 Timestamp of dispatch |
+| `post_text` | `TEXT` | **Complete text of the post** |
+| `style_blend` | `TEXT` | **Selected content style blend** |
+| `topics_used` | `TEXT` | Research topics used |
+| `sources_used` | `TEXT` | Web research sources used |
+| `hook_type` | `TEXT` | Opening hook archetype |
+| `content_structure` | `TEXT` | Content structure architecture |
+| `closure_type` | `TEXT` | Closure / CTA type |
+| `detailed_critique` | `TEXT` | Multi-evaluator detailed critique |
+| `platform` | `TEXT` | Platform identifier (`X`) |
+
+### Inspecting SQLite Database in Python:
+```python
+import sqlite3
+
+conn = sqlite3.connect("dispatched_posts.db")
+cursor = conn.cursor()
+cursor.execute("SELECT id, dispatched_at, style_blend, post_text FROM dispatched_x_posts ORDER BY id DESC")
+for row in cursor.fetchall():
+    print(row)
+conn.close()
 ```
 
 ---
 
-## 4. Mandatory Aidan Nguyen Tran Signature Style
+## 4. File Layout
 
-- **Upfront Hook**: First sentence strictly $< 10$ words, framing AI, robotics, real-world systems, automation, and marketing as a systems/memory engineering problem.
-- **Paragraph Cadence**: Ultra-skimmable 1–2 sentence paragraphs separated by `\n\n` for maximum visual breathing room.
-- **Teardown Architecture**: Upfront Hook -> System Bottleneck -> 3-Step Tactical Solution -> Business Outcome -> Reflective Question.
-- **DIGIiq Perspective**: Written from DIGIiq Solution Private Limited's authentic team perspective.
+```
+social media Posts Automations/
+├── main.py                   # Main 11-stage multi-agent pipeline
+├── send_to_n8n.py            # Standalone n8n dispatcher, SQLite DB logger & history sync
+├── post.py                   # Interactive post selection utility script
+├── history.txt               # Persistent post history memory repository
+├── dispatched_posts.db       # Lightweight SQLite database for dispatched posts
+├── .env                      # Environment API keys (GEMINI_API_KEY, N8N_API_KEY, N8N_WEBHOOK_URL)
+├── requirements.txt          # Python dependencies
+├── readme.md                 # Complete system documentation
+└── output/                   # Output directory for generated posts
+    ├── x_post.txt            # Single best X post clean text (<= 270 chars)
+    ├── x_post_metadata.json   # X post metadata sidecar
+    └── posts_*.txt           # Complete timestamped analytics report
+```
 
 ---
 
-## 5. How to Run
+## 5. Step-by-Step User Guide
 
-1. Execute main pipeline to generate 10 posts:
-   ```bash
-   python main.py
-   ```
-2. Pick chosen posts and append to history:
-   ```bash
-   python post.py
-   ```
+### Step 1: Run Main Pipeline with Interactive Inputs
+```bash
+python main.py
+```
+- **Input 1**: Enter custom research topics or press `ENTER` for defaults.
+- **Input 2**: Select style numbers (e.g. `1,5` or `2,3`).
+- Outputs are generated in `output/posts_YYYYMMDD_HHMMSS.txt`, `output/x_post.txt`, and `output/x_post_metadata.json`.
+
+### Step 2: Dispatch Best X Post to n8n, Log to SQLite DB & Sync History
+```bash
+python send_to_n8n.py
+```
+- Sends `output/x_post.txt` to your n8n webhook.
+- Upon successful delivery, permanently logs all metadata to SQLite database `dispatched_posts.db` and appends to `history.txt`.

@@ -20,3 +20,6 @@ posts_*.txt
 .vscode/
 .idea/
 *.swp
+
+output/
+dispatched_posts.db
